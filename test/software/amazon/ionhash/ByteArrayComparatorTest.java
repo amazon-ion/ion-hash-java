@@ -7,7 +7,7 @@ import java.util.Comparator;
 import static org.junit.Assert.assertEquals;
 
 public class ByteArrayComparatorTest {
-    private Comparator<byte[]> bac = new IonHashReaderImpl.ByteArrayComparator();
+    private Comparator<byte[]> bac = new Hasher.ByteArrayComparator();
 
     @Test(expected = NullPointerException.class)
     public void testNPE1() {

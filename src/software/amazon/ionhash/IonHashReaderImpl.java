@@ -9,16 +9,12 @@ import software.amazon.ion.SymbolToken;
 import software.amazon.ion.Timestamp;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayDeque;
-import java.util.Collection;
-import java.util.Comparator;
 import java.util.Date;
-import java.util.Deque;
 import java.util.Iterator;
-import java.util.TreeSet;
+
+import static software.amazon.ionhash.Hasher.EMPTY_BYTE_ARRAY;
 
 /**
  * This IonReader decorator calculates a currentHash of the Ion data model.
@@ -28,15 +24,10 @@ import java.util.TreeSet;
  */
 class IonHashReaderImpl implements IonHashReader {
     private final IonReader delegate;
-    private final IonHasherProvider hasherProvider;
-    private final ScalarHasher scalarHasher;
-    private final IonHasher symbolHasher;
-    private final IonHashBytes hashBytes = new IonHashBytes();
+    private final Hasher hasher;
 
-    private final Deque<ContainerHasher> containerHasherStack = new ArrayDeque<>();
     private IonType ionType;
-    private byte[] currentHash = IonHashBytes.EMPTY_BYTE_ARRAY;
-    private byte[][] scalarParts;
+    private byte[] currentHash = EMPTY_BYTE_ARRAY;
 
     IonHashReaderImpl(IonReader delegate, IonHasherProvider hasherProvider) {
         if (delegate == null) {
@@ -47,9 +38,7 @@ class IonHashReaderImpl implements IonHashReader {
         }
 
         this.delegate = delegate;
-        this.hasherProvider = hasherProvider;
-        this.scalarHasher = new ScalarHasher();
-        this.symbolHasher = hasherProvider.newHasher();
+        this.hasher = new Hasher(hasherProvider);
     }
 
     @Override
@@ -67,67 +56,77 @@ class IonHashReaderImpl implements IonHashReader {
                 consumeRemainder();
                 stepOut();
             } else {
-                scalarHasher.withFieldName(getFieldNameSymbol())
-                            .withAnnotations(getTypeAnnotationSymbols());
-                scalarHasher.prepare();
-                hashParts(scalarHasher, scalarParts);
+                hasher.scalar().withFieldName(getFieldNameSymbol())
+                               .withAnnotations(getTypeAnnotationSymbols());
+                hasher.scalar().prepare();
+
+                try {
+                    if (isNullValue()) {
+                        hasher.scalar().updateNull(ionType);
+                    } else {
+                        switch (ionType) {
+                            case BLOB:
+                                hasher.scalar().updateBlob(newBytes());
+                                break;
+                            case BOOL:
+                                hasher.scalar().updateBool(booleanValue());
+                                break;
+                            case CLOB:
+                                hasher.scalar().updateClob(newBytes());
+                                break;
+                            case DECIMAL:
+                                hasher.scalar().updateDecimal(decimalValue());
+                                break;
+                            case FLOAT:
+                                hasher.scalar().updateFloat(doubleValue());
+                                break;
+                            case INT:
+                                hasher.scalar().updateInt(bigIntegerValue());
+                                break;
+                            case STRING:
+                                hasher.scalar().updateString(stringValue());
+                                break;
+                            case SYMBOL:
+                                hasher.scalar().updateSymbolToken(symbolValue());
+                                break;
+                            case TIMESTAMP:
+                                hasher.scalar().updateTimestamp(timestampValue());
+                                break;
+                            default:
+                                throw new IonHashException("Unsupported IonType (" + ionType + ")");
+                        }
+                    }
+                } catch (IOException e) {
+                    throw new IonHashException(e);
+                }
 
                 // update such that currentHash always represents
                 // the hash of the value we just "nexted" past
-                currentHash = scalarHasher.digest();
-
-                if (!containerHasherStack.isEmpty()) {
-                    containerHasherStack.peekFirst().update(currentHash);
-                }
+                currentHash = hasher.scalar().digest();
             }
         }
 
         ionType = delegate.next();
-
-        if (ionType != null) {
-            if (isNullValue() || !IonType.isContainer(ionType)) {
-                // capture the scalarParts here to avoid a scenario in which the caller is using
-                // the deprecated hasNext() method, which clears value state from the wrapped reader
-                scalarParts = hashBytes.scalarOrNullParts(ionType, this);
-            }
-        }
 
         return ionType;
     }
 
     @Override
     public void stepIn() {
-        SymbolToken fieldName = getFieldNameSymbol();
-        SymbolToken[] annotations = getTypeAnnotationSymbols();
-
+        hasher.stepIn(ionType, getFieldNameSymbol(), getTypeAnnotationSymbols());
         delegate.stepIn();
 
-        ContainerHasher hasher = ionType == IonType.STRUCT
-                                   ? new StructHasher(fieldName, annotations)
-                                   : new ContainerHasher(ionType, fieldName, annotations);
-        hasher.prepare();
-
-        containerHasherStack.addFirst(hasher);
         ionType = null;
-        currentHash = IonHashBytes.EMPTY_BYTE_ARRAY;
+        currentHash = EMPTY_BYTE_ARRAY;
     }
 
     @Override
     public void stepOut() {
-        if (containerHasherStack.isEmpty()) {
-            throw new IllegalStateException("Cannot stepOut any further, already at top level.");
-        }
-
         // the caller may be bailing on the current container;
         // ensure we consume the rest of it in order to compute currentHash correctly
         consumeRemainder();
 
-        currentHash = containerHasherStack.pop().digest();
-
-        if (!containerHasherStack.isEmpty()) {
-            containerHasherStack.peekFirst().update(currentHash);
-        }
-
+        currentHash = hasher.stepOut();
         delegate.stepOut();
     }
 
@@ -144,172 +143,17 @@ class IonHashReaderImpl implements IonHashReader {
         }
     }
 
-    /**
-     * Centralizes fieldname and annotation handling for scalar and container values.
-     */
-    private abstract class AbstractHasher implements IonHasher {
-        SymbolToken fieldName;
-        SymbolToken[] annotations;
-
-        final IonHasher hasher = hasherProvider.newHasher();
-        private IonHasher fieldHasher;
-        private IonHasher annotationHasher;
-
-        private AbstractHasher(SymbolToken fieldName, SymbolToken[] annotations) {
-            this.fieldName = fieldName;
-            this.annotations = annotations;
-        }
-
-        private AbstractHasher(IonHasher fieldHasher, IonHasher annotationHasher) {
-            this.fieldHasher = fieldHasher;
-            this.annotationHasher = annotationHasher;
-        }
-
-        void prepare() {
-            if (fieldName != null) {
-                if (fieldHasher == null) {
-                    fieldHasher = hasherProvider.newHasher();
-                }
-                fieldHasher.update(symbolTokenHash(fieldName));
-            }
-
-            if (annotations.length > 0) {
-                if (annotationHasher == null) {
-                    annotationHasher = hasherProvider.newHasher();
-                }
-
-                annotationHasher.update(new byte[] {hashBytes.containerTQ(null)});
-                for (SymbolToken annotation : annotations) {
-                    annotationHasher.update(symbolTokenHash(annotation));
-                }
-            }
-        }
-
-        @Override
-        public void update(byte[] bytes) {
-            hasher.update(bytes);
-        }
-
-        @Override
-        public byte[] digest() {
-            byte[] hash = hasher.digest();
-
-            if (annotations.length > 0) {
-                annotationHasher.update(hash);
-                hash = annotationHasher.digest();
-            }
-
-            if (fieldName != null) {
-                fieldHasher.update(hash);
-                hash = fieldHasher.digest();
-            }
-
-            return hash;
-        }
-
-        private final byte[] symbolTokenHash(SymbolToken token) {
-            hashParts(symbolHasher, hashBytes.symbolParts(token));
-            return symbolHasher.digest();
-        }
-    }
-
-    /**
-     * A new ContainerHasher (or StructHasher) is used for each list, sexp, or struct.
-     */
-    private class ContainerHasher extends AbstractHasher {
-        private IonType ionType;
-
-        private ContainerHasher(IonType ionType, SymbolToken fieldName, SymbolToken[] annotations) {
-            super(fieldName, annotations);
-            assert IonType.isContainer(ionType);
-            this.ionType = ionType;
-        }
-
-        @Override
-        void prepare() {
-            super.prepare();
-            byte tq = hashBytes.containerTQ(ionType);
-            hasher.update(new byte[] {tq});
-        }
-    }
-
-    /**
-     * Collects and sorts hashes of struct fields before providing a digest.
-     */
-    private class StructHasher extends ContainerHasher {
-        private final Collection<byte[]> hashes = new TreeSet<>(BYTE_ARRAY_COMPARATOR);
-
-        private StructHasher(SymbolToken fieldName, SymbolToken[] annotations) {
-            super(IonType.STRUCT, fieldName, annotations);
-        }
-
-        @Override
-        public void update(byte[] hash) {
-            hashes.add(hash);
-        }
-
-        @Override
-        public byte[] digest() {
-            for(byte[] hash : hashes) {
-                hasher.update(hash);
-            }
-            return super.digest();
-        }
-    }
-
-    /**
-     * Singleton responsible for hashing all scalar and null values.
-     */
-    private class ScalarHasher extends AbstractHasher {
-        private ScalarHasher() {
-            super(hasherProvider.newHasher(), hasherProvider.newHasher());
-        }
-
-        ScalarHasher withFieldName(SymbolToken fieldName) {
-            this.fieldName = fieldName;
-            return this;
-        }
-
-        ScalarHasher withAnnotations(SymbolToken[] annotations) {
-            this.annotations = annotations;
-            return this;
-        }
-    }
-
-    private static void hashParts(IonHasher hasher, byte[][] parts) {
-        for (byte[] part : parts) {
-            if (part.length > 0) {
-                hasher.update(part);
-            }
-        }
-    }
-
-    private static final ByteArrayComparator BYTE_ARRAY_COMPARATOR = new ByteArrayComparator();
-    static class ByteArrayComparator implements Comparator<byte[]>, Serializable {
-        @Override
-        public int compare(byte[] a, byte[] b) {
-            int i = 0;
-            while (i < a.length && i < b.length) {
-                int aByte = a[i] & 0xFF;
-                int bByte = b[i] & 0xFF;
-                if (aByte != bByte) {
-                    return (aByte - bByte) < 0 ? -1 : 1;
-                }
-                i++;
-            }
-            int lenDiff = a.length - b.length;
-            return lenDiff == 0 ? 0 : (lenDiff < 0 ? -1 : 1);
-        }
-    }
-
     @Override
     public void close() throws IOException {
+        try {
+            hasher.close();
+        } catch (Exception e) {
+        }
         delegate.close();
-        hashBytes.close();
     }
 
 
-    ///////// The remaining methods are all handled by the delegate ///////////
+    ///////// The remaining methods are all handled solely by the delegate ///////////
 
     @Override
     public int getDepth() {

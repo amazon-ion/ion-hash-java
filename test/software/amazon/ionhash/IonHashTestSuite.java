@@ -14,20 +14,32 @@ import java.io.InputStream;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+    // IonHashReader tests
     IonHashTestSuite.BinaryTest.class,
     IonHashTestSuite.DomTest.class,
     IonHashTestSuite.TextTest.class,
     IonHashTestSuite.BinaryInputStreamTest.class,
     IonHashTestSuite.TextNoStepInTest.class,
+
+    // IonHashWriter tests
+    IonHashTestSuite.WriterTest.class,
 })
 public class IonHashTestSuite {
     final static IonSystem ION = IonSystemBuilder.standard().build();
 
     abstract static class IonHashTester {
-        abstract IonReader getIonReader(String ionText);
+        IonReader getIonReader(String ionText) {
+            return ION.newReader(ionText);
+        }
 
         IonReader getIonReader(byte[] ionBinary) {
             return ION.newReader(ionBinary);
+        }
+
+        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+            IonHashReader ihr = new IonHashReaderImpl(reader, hasherProvider);
+            traverse(ihr);
+            ihr.close();
         }
 
         void traverse(IonHashReader reader) {
@@ -77,10 +89,6 @@ public class IonHashTestSuite {
      */
     @RunWith(IonHashRunner.class)
     public static class TextTest extends IonHashTester {
-        @Override
-        public IonReader getIonReader(String ionText) {
-            return ION.newReader(ionText);
-        }
     }
 
     /**
@@ -122,6 +130,79 @@ public class IonHashTestSuite {
                     return -1;
                 }
             });
+        }
+    }
+
+
+    // IonHashWriter tests
+
+    /**
+     * verify behavior of an IonHashWriter
+     */
+    @RunWith(IonHashRunner.class)
+    public static class WriterTest extends IonHashTester {
+        @Override
+        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            IonWriter writer = ION.newTextWriter(baos);
+            IonHashWriter ihw = new IonHashWriterImpl(writer, hasherProvider);
+            traverse(reader, ihw);
+            ihw.close();
+        }
+
+        private void traverse(IonReader reader, IonHashWriter ihw) throws IOException {
+            IonType type = null;
+            while ((type = reader.next()) != null) {
+                ihw.setTypeAnnotationSymbols(reader.getTypeAnnotationSymbols());
+                if (reader.isInStruct()) {
+                    ihw.setFieldNameSymbol(reader.getFieldNameSymbol());
+                }
+
+                if (reader.isNullValue()) {
+                    ihw.writeNull(type);
+                    continue;
+                }
+
+                if (IonType.isContainer(type)) {
+                    ihw.stepIn(type);
+                    reader.stepIn();
+                    traverse(reader, ihw);
+                    reader.stepOut();
+                    ihw.stepOut();
+                } else {
+                    switch (type) {
+                        case BLOB:
+                            ihw.writeBlob(reader.newBytes());
+                            break;
+                        case BOOL:
+                            ihw.writeBool(reader.booleanValue());
+                            break;
+                        case CLOB:
+                            ihw.writeClob(reader.newBytes());
+                            break;
+                        case DECIMAL:
+                            ihw.writeDecimal(reader.decimalValue());
+                            break;
+                        case FLOAT:
+                            ihw.writeFloat(reader.doubleValue());
+                            break;
+                        case INT:
+                            ihw.writeInt(reader.bigIntegerValue());
+                            break;
+                        case STRING:
+                            ihw.writeString(reader.stringValue());
+                            break;
+                        case SYMBOL:
+                            ihw.writeSymbolToken(reader.symbolValue());
+                            break;
+                        case TIMESTAMP:
+                            ihw.writeTimestamp(reader.timestampValue());
+                            break;
+                        default:
+                            throw new RuntimeException("Unexpected type '" + type + "'");
+                    }
+                }
+            }
         }
     }
 }
