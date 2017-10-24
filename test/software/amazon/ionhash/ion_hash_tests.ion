@@ -274,8 +274,8 @@ timestampDistinct03::{
 
 // symbols
 // SID0 test
-{ ion:'',            expect:{ identity:(update::(0x70)
-                                        digest::(0x70)) } }
+//{ ion:'',            expect:{ identity:(update::(0x70)
+//                                        digest::(0x70)) } }
 { ion:' ',           expect:{ identity:(update::(0x70)
                                         update::(0x20)
                                         digest::(0x70 0x20)) } }
