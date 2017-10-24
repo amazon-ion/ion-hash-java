@@ -33,7 +33,7 @@ public class IonHashReaderImplTest {
                 ION.newReader("1 2 3"), TestIonHasherProviders.getInstance("identity"));
 
         assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[]{}, ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.currentHash());
 
         assertEquals(IonType.INT, ihr.next());
         assertArrayEquals(new byte[] {0x20, 0x01}, ihr.currentHash());

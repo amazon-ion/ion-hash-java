@@ -14,20 +14,32 @@ import java.io.InputStream;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+    // IonHashReader tests
     IonHashTestSuite.BinaryTest.class,
     IonHashTestSuite.DomTest.class,
     IonHashTestSuite.TextTest.class,
     IonHashTestSuite.BinaryInputStreamTest.class,
     IonHashTestSuite.TextNoStepInTest.class,
+
+    // IonHashWriter tests
+    IonHashTestSuite.WriterTest.class,
 })
 public class IonHashTestSuite {
     final static IonSystem ION = IonSystemBuilder.standard().build();
 
     abstract static class IonHashTester {
-        abstract IonReader getIonReader(String ionText);
+        IonReader getIonReader(String ionText) {
+            return ION.newReader(ionText);
+        }
 
         IonReader getIonReader(byte[] ionBinary) {
             return ION.newReader(ionBinary);
+        }
+
+        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+            IonHashReader ihr = new IonHashReaderImpl(reader, hasherProvider);
+            traverse(ihr);
+            ihr.close();
         }
 
         void traverse(IonHashReader reader) {
@@ -77,10 +89,6 @@ public class IonHashTestSuite {
      */
     @RunWith(IonHashRunner.class)
     public static class TextTest extends IonHashTester {
-        @Override
-        public IonReader getIonReader(String ionText) {
-            return ION.newReader(ionText);
-        }
     }
 
     /**
@@ -122,6 +130,24 @@ public class IonHashTestSuite {
                     return -1;
                 }
             });
+        }
+    }
+
+
+    // IonHashWriter tests
+
+    /**
+     * verify behavior of an IonHashWriter
+     */
+    @RunWith(IonHashRunner.class)
+    public static class WriterTest extends IonHashTester {
+        @Override
+        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            IonWriter writer = ION.newTextWriter(baos);
+            IonHashWriter ihw = new IonHashWriterImpl(writer, hasherProvider);
+            ihw.writeValues(reader);
+            ihw.close();
         }
     }
 }
