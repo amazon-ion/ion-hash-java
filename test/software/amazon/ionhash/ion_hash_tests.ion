@@ -37,6 +37,9 @@
       expect:{ identity:(update::(0x20 0x05) digest::(0x20 0x05)) }
     }
 
+  For these tests, logic that caches digests of some scalars (e.g., symbols) is disabled.
+  This caching logic may be enabled for an individual test by specifying "useDigestCache:true".
+
   Alternatively, or in addition to expecting identity bytes, values computed by an MD5
   hasher are supported.  An expect:{ md5:(()) } value asserts that the expected sequence
   of MD5 hashes is reported as a separate test, named with a ".md5" suffix.
@@ -1233,6 +1236,86 @@ annotationCount14::{
 }
 // /annotations
 
+// verify expected digestCache behavior
+digestCache::{
+  useDigestCache:true,
+  ion:(
+    null null.null null.bool null.int null.float null.decimal null.timestamp null.symbol null.string null.clob null.blob null.list null.sexp null.struct
+    false true
+    a b c
+
+    null null.null null.bool null.int null.float null.decimal null.timestamp null.symbol null.string null.clob null.blob null.list null.sexp null.struct
+    false true
+    a a a
+    b b b
+    c c c
+  ),
+  expect:{ identity:(
+    update::(0xc0)
+
+    // nulls
+      update::(0x0f) digest::(0x0f)
+    update::(0x0f)
+    update::(0x0f)
+      update::(0x1f) digest::(0x1f)
+    update::(0x1f)
+      update::(0x2f) digest::(0x2f)
+    update::(0x2f)
+      update::(0x4f) digest::(0x4f)
+    update::(0x4f)
+      update::(0x5f) digest::(0x5f)
+    update::(0x5f)
+      update::(0x6f) digest::(0x6f)
+    update::(0x6f)
+      update::(0x7f) digest::(0x7f)
+    update::(0x7f)
+      update::(0x8f) digest::(0x8f)
+    update::(0x8f)
+      update::(0x9f) digest::(0x9f)
+    update::(0x9f)
+      update::(0xaf) digest::(0xaf)
+    update::(0xaf)
+      update::(0xbf) digest::(0xbf)
+    update::(0xbf)
+      update::(0xcf) digest::(0xcf)
+    update::(0xcf)
+      update::(0xdf) digest::(0xdf)
+    update::(0xdf)
+
+    // bools
+      update::(0x10) digest::(0x10)
+    update::(0x10)
+      update::(0x11) digest::(0x11)
+    update::(0x11)
+
+    // symbols
+      update::(0x70) update::(0x61) digest::(0x70 0x61)
+    update::(0x70 0x61)
+      update::(0x70) update::(0x62) digest::(0x70 0x62)
+    update::(0x70 0x62)
+      update::(0x70) update::(0x63) digest::(0x70 0x63)
+    update::(0x70 0x63)
+
+    // verify that subsequent addition of the above scalars is accomplished without a digest:: call
+    update::(0x0f) update::(0x0f) update::(0x1f) update::(0x2f) update::(0x4f) update::(0x5f) update::(0x6f) update::(0x7f) update::(0x8f) update::(0x9f) update::(0xaf) update::(0xbf) update::(0xcf) update::(0xdf)
+    update::(0x10) update::(0x11)
+    update::(0x70 0x61) update::(0x70 0x61) update::(0x70 0x61)
+    update::(0x70 0x62) update::(0x70 0x62) update::(0x70 0x62)
+    update::(0x70 0x63) update::(0x70 0x63) update::(0x70 0x63)
+
+    digest::(
+      0xc0
+      0x0f 0x0f 0x1f 0x2f 0x4f 0x5f 0x6f 0x7f 0x8f 0x9f 0xaf 0xbf 0xcf 0xdf
+      0x10 0x11
+      0x70 0x61 0x70 0x62 0x70 0x63
+
+      0x0f 0x0f 0x1f 0x2f 0x4f 0x5f 0x6f 0x7f 0x8f 0x9f 0xaf 0xbf 0xcf 0xdf
+      0x10 0x11
+      0x70 0x61 0x70 0x61 0x70 0x61
+      0x70 0x62 0x70 0x62 0x70 0x62
+      0x70 0x63 0x70 0x63 0x70 0x63)
+  ) }
+}
 
 // MD5 tests
 {

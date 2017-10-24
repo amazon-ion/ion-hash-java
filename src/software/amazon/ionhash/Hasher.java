@@ -17,10 +17,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Map;
 import java.util.TreeSet;
+import java.util.WeakHashMap;
 
 /**
- * Provides core hash functionality via update/digest/stepIn/stepOut operations
+ * Provides core hash functionality via update/digestScalar/stepIn/stepOut operations
  * for use by streaming hash readers and writers.  It relies on the binary
  * encoding implementation in IonRawBinaryWriter when possible.
  * <p/>
@@ -30,7 +32,7 @@ class Hasher implements Closeable {
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     private final IonHasherProvider hasherProvider;
-    private final IonHasher symbolHasher;
+    private final ScalarHasher symbolHasher;
     private final ScalarHasher scalarHasher;
 
     private final Deque<ContainerHasher> containerHasherStack = new ArrayDeque<>();
@@ -40,8 +42,12 @@ class Hasher implements Closeable {
 
     Hasher(IonHasherProvider hasherProvider) {
         this.hasherProvider = hasherProvider;
-        this.symbolHasher = hasherProvider.newHasher();
-        this.scalarHasher = new ScalarHasher();
+
+        // cache for digests of symbols and common values
+        boolean useDigestCache = System.getProperty("ion-hash-java.useDigestCache", "true").equals("true");
+        Map<String,byte[]> digestCache = useDigestCache ? new WeakHashMap<>() : null;
+        this.symbolHasher = new ScalarHasher(digestCache);
+        this.scalarHasher = new ScalarHasher(digestCache);
 
         try {
             this.baos = new ByteArrayOutputStream();
@@ -149,6 +155,7 @@ class Hasher implements Closeable {
     public void close() throws IOException {
         writer.close();
         baos.close();
+        symbolHasher.close();
         scalarHasher.close();
     }
 
@@ -174,22 +181,27 @@ class Hasher implements Closeable {
         }
 
         void prepare() {
-            if (fieldName != null) {
-                if (fieldHasher == null) {
-                    fieldHasher = hasherProvider.newHasher();
-                }
-                fieldHasher.update(symbolTokenHash(fieldName));
-            }
-
-            if (annotations.length > 0) {
-                if (annotationHasher == null) {
-                    annotationHasher = hasherProvider.newHasher();
+            try {
+                if (fieldName != null) {
+                    if (fieldHasher == null) {
+                        fieldHasher = hasherProvider.newHasher();
+                    }
+                    byte[] fieldNameHash = symbolHasher.digestSymbolToken(fieldName, false);
+                    fieldHasher.update(fieldNameHash);
                 }
 
-                annotationHasher.update(new byte[] {(byte)0xE0});
-                for (SymbolToken annotation : annotations) {
-                    annotationHasher.update(symbolTokenHash(annotation));
+                if (annotations != null && annotations.length > 0) {
+                    if (annotationHasher == null) {
+                        annotationHasher = hasherProvider.newHasher();
+                    }
+
+                    annotationHasher.update(new byte[] {(byte)0xE0});
+                    for (SymbolToken annotation : annotations) {
+                        annotationHasher.update(symbolHasher.digestSymbolToken(annotation, false));
+                    }
                 }
+            } catch (IOException e) {
+                throw new IonHashException(e);
             }
         }
 
@@ -202,7 +214,7 @@ class Hasher implements Closeable {
         public byte[] digest() {
             byte[] hash = hasher.digest();
 
-            if (annotations.length > 0) {
+            if (annotations != null && annotations.length > 0) {
                 annotationHasher.update(hash);
                 hash = annotationHasher.digest();
             }
@@ -215,19 +227,10 @@ class Hasher implements Closeable {
             return hash;
         }
 
-        private final byte[] symbolTokenHash(SymbolToken token) {
-            hashParts(symbolHasher, symbolParts(token));
-            return symbolHasher.digest();
-        }
-
         void hashParts(byte[][] parts) {
-            hashParts(this, parts);
-        }
-
-        private void hashParts(IonHasher hasher, byte[][] parts) {
             for (byte[] part : parts) {
                 if (part.length > 0) {
-                    hasher.update(part);
+                    update(part);
                 }
             }
         }
@@ -291,13 +294,14 @@ class Hasher implements Closeable {
     }
 
     /**
-     * Singleton responsible for hashing all scalar and null values.
+     * Responsible for hashing all scalar and null values.
      */
     class ScalarHasher extends AbstractHasher implements Closeable {
         private final IonWriter scalarWriter;
         private final ByteArrayOutputStream scalarBaos;
+        private final Map<String,byte[]> digestCache;
 
-        ScalarHasher() {
+        ScalarHasher(Map<String,byte[]> digestCache) {
             super(hasherProvider.newHasher(), hasherProvider.newHasher());
 
             try {
@@ -306,6 +310,8 @@ class Hasher implements Closeable {
             } catch (IOException e) {
                 throw new IonHashException(e);
             }
+
+            this.digestCache = digestCache;
         }
 
         ScalarHasher withFieldName(SymbolToken fieldName) {
@@ -318,81 +324,136 @@ class Hasher implements Closeable {
             return this;
         }
 
-        void updateBlob(byte[] value) throws IOException {
-            updateScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value));
+        byte[] digestBlob(byte[] value) throws IOException {
+            return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value));
         }
 
-        void updateBlob(byte[] value, int start, int len) throws IOException {
-            updateScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value, start, len));
+        byte[] digestBlob(byte[] value, int start, int len) throws IOException {
+            return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value, start, len));
         }
 
-        void updateBool(boolean value) throws IOException {
-            updateScalar(IonType.BOOL, () -> scalarWriter.writeBool(value));
+        byte[] digestBool(boolean value) throws IOException {
+            return cachingDigestScalar(IonType.BOOL,
+                    () -> value+"",
+                    () -> scalarWriter.writeBool(value));
         }
 
-        void updateClob(byte[] value) throws IOException {
-            updateScalar(IonType.CLOB, () -> scalarWriter.writeClob(value));
+        byte[] digestClob(byte[] value) throws IOException {
+            return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value));
         }
 
-        void updateClob(byte[] value, int start, int len) throws IOException {
-            updateScalar(IonType.CLOB, () -> scalarWriter.writeClob(value, start, len));
+        byte[] digestClob(byte[] value, int start, int len) throws IOException {
+            return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value, start, len));
         }
 
-        void updateDecimal(BigDecimal value) throws IOException {
-            updateScalar(IonType.DECIMAL, () -> scalarWriter.writeDecimal(value));
+        byte[] digestDecimal(BigDecimal value) throws IOException {
+            return digestScalar(IonType.DECIMAL, () -> scalarWriter.writeDecimal(value));
         }
 
-        void updateFloat(double value) throws IOException {
+        byte[] digestFloat(double value) throws IOException {
             if (new Double(value).equals(0.0)) {
                 // value is 0.0, not -0.0
                 hashParts(new byte[][] {new byte[] {0x40}});
+                return digest();
             } else {
-                updateScalar(IonType.FLOAT, () -> scalarWriter.writeFloat(value));
+                return digestScalar(IonType.FLOAT, () -> scalarWriter.writeFloat(value));
             }
         }
 
-        void updateInt(BigInteger value) throws IOException {
-            updateScalar(IonType.INT, () -> scalarWriter.writeInt(value));
+        byte[] digestInt(BigInteger value) throws IOException {
+            return digestScalar(IonType.INT, () -> scalarWriter.writeInt(value));
         }
 
-        void updateNull() throws IOException {
-            updateScalar(IonType.NULL, () -> scalarWriter.writeNull());
+        byte[] digestNull() throws IOException {
+            return digestNull(IonType.NULL);
         }
 
-        void updateNull(IonType type) throws IOException {
-            updateScalar(type, () -> scalarWriter.writeNull(type));
+        byte[] digestNull(IonType type) throws IOException {
+            return cachingDigestScalar(type,
+                    () -> type != null ? type.toString() : IonType.NULL.toString(),
+                    () -> scalarWriter.writeNull(type));
         }
 
-        void updateString(String value) throws IOException {
-            updateScalar(IonType.STRING, () -> scalarWriter.writeString(value));
+        byte[] digestString(String value) throws IOException {
+            return digestScalar(IonType.STRING, () -> scalarWriter.writeString(value));
         }
 
-        void updateSymbol(String value) throws IOException {
-            updateSymbolToken(newSymbolToken(value));
+        byte[] digestSymbol(String value) throws IOException {
+            return digestSymbolToken(newSymbolToken(value));
         }
 
-        void updateSymbolToken(SymbolToken value) throws IOException {
-            hashParts(symbolParts(value));
+        byte[] digestSymbolToken(SymbolToken value) throws IOException {
+            return digestSymbolToken(value, true);
         }
 
-        void updateTimestamp(Timestamp value) throws IOException {
-            updateScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
+        byte[] digestSymbolToken(SymbolToken value, boolean updateContainer) throws IOException {
+            String digestCacheKey = null;
+            byte[] digest = null;
+            if (digestCache != null && value.getText() != null) {
+                digestCacheKey = getDigestCacheKey(IonType.SYMBOL, value.getText());
+                digest = digestCache.get(digestCacheKey);
+            }
+
+            if (digest == null) {
+                hashParts(symbolParts(value));
+            }
+            digest = digest(digest, updateContainer);
+
+            if (digestCacheKey != null && digest != null) {
+                digestCache.put(digestCacheKey, digest);
+            }
+            return digest;
         }
 
-        private void updateScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
+        byte[] digestTimestamp(Timestamp value) throws IOException {
+            return digestScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
+        }
+
+        private byte[] cachingDigestScalar(IonType ionType, CacheableValue cacheableValue, Updatable scalarUpdater) throws IOException {
+            String digestCacheKey = null;
+            byte[] digest = null;
+            if (digestCache != null) {
+                digestCacheKey = getDigestCacheKey(ionType, cacheableValue.valueToString());
+                digest = digestCache.get(digestCacheKey);
+            }
+
+            if (digest == null) {
+                digest = digestScalar(ionType, scalarUpdater);
+            } else {
+                digest = digest(digest, true);
+            }
+
+            if (digestCacheKey != null && digest != null) {
+                digestCache.put(digestCacheKey, digest);
+            }
+            return digest;
+        }
+
+        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
             scalarBaos.reset();
             scalarUpdater.update();
             scalarWriter.finish();
             hashParts(scalarOrNullSplitParts(ionType, scalarBaos.toByteArray()));
+            return digest();
         }
 
-        @Override
         public byte[] digest() {
-            byte[] hash = super.digest();
-            if (!containerHasherStack.isEmpty()) {
-                containerHasherStack.peekFirst().update(hash);
+            return digest(null, true);
+        }
+
+        private byte[] digest(byte[] cachedDigest, boolean updateContainer) {
+            byte[] digest = cachedDigest;
+            if (digest == null) {
+                digest = super.digest();
             }
-            return hash;
+            if (updateContainer && !containerHasherStack.isEmpty()) {
+                containerHasherStack.peekFirst().update(digest);
+            }
+            return digest;
+        }
+
+        private String getDigestCacheKey(IonType ionType, String value) {
+            return new StringBuilder().append(ionType.ordinal()).append(".").append(value).toString();
         }
 
         @Override
@@ -400,6 +461,11 @@ class Hasher implements Closeable {
             scalarWriter.close();
             scalarBaos.close();
         }
+    }
+
+    // lambda interface that facilitates mapping a value to a String representation for digest caching
+    private interface CacheableValue {
+        String valueToString();
     }
 
     private static final ByteArrayComparator BYTE_ARRAY_COMPARATOR = new ByteArrayComparator();

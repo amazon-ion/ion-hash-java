@@ -1,5 +1,6 @@
 package software.amazon.ionhash;
 
+import software.amazon.ion.IonBool;
 import software.amazon.ion.IonContainer;
 import software.amazon.ion.IonInt;
 import software.amazon.ion.IonReader;
@@ -66,6 +67,10 @@ public class IonHashRunner extends Runner {
                 if (annotations.length > 0) {
                     testName = annotations[0];
                 }
+
+                IonBool useDigestCacheBool = (IonBool)test.get("useDigestCache");
+                boolean useDigestCache = useDigestCacheBool != null ? useDigestCacheBool.booleanValue() : false;
+                System.setProperty("ion-hash-java.useDigestCache", useDigestCache+"");
 
                 IonStruct expect = (IonStruct)test.get("expect");
                 Iterator<IonValue> expectIter = expect.iterator();
