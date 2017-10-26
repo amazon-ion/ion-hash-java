@@ -1,10 +1,12 @@
 package software.amazon.ionhash;
 
 import software.amazon.ion.IonReader;
+import software.amazon.ion.IonSexp;
 import software.amazon.ion.IonSystem;
 import software.amazon.ion.IonType;
 import software.amazon.ion.IonWriter;
 import software.amazon.ion.system.IonSystemBuilder;
+import software.amazon.ionhash.TestIonHasherProviders.TestIonHasherProvider;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -23,11 +25,16 @@ import java.io.InputStream;
 
     // IonHashWriter tests
     IonHashTestSuite.WriterTest.class,
+
+    // digest cache tests
+    IonHashTestSuite.DigestCacheTest.class,
 })
 public class IonHashTestSuite {
     final static IonSystem ION = IonSystemBuilder.standard().build();
 
     abstract static class IonHashTester {
+        TestIonHasherProvider hasherProvider;
+
         IonReader getIonReader(String ionText) {
             return ION.newReader(ionText);
         }
@@ -36,7 +43,8 @@ public class IonHashTestSuite {
             return ION.newReader(ionBinary);
         }
 
-        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+        void traverse(IonReader reader, TestIonHasherProvider hasherProvider) throws IOException {
+            this.hasherProvider = hasherProvider;
             IonHashReader ihr = new IonHashReaderImpl(reader, hasherProvider);
             traverse(ihr);
             ihr.close();
@@ -51,6 +59,14 @@ public class IonHashTestSuite {
                     reader.stepOut();
                 }
             }
+        }
+
+        IonSexp getHashLog() {
+            return hasherProvider.getHashLog();
+        }
+
+        IonSexp filterExpectedHashLog(IonSexp expectedHashLog) {
+            return expectedHashLog;
         }
     }
 
@@ -97,7 +113,7 @@ public class IonHashTestSuite {
     @RunWith(IonHashRunner.class)
     public static class TextNoStepInTest extends TextTest {
         @Override
-        public void traverse(IonHashReader reader) {
+        void traverse(IonHashReader reader) {
             while (reader.next() != null) {
             }
         }
@@ -142,12 +158,39 @@ public class IonHashTestSuite {
     @RunWith(IonHashRunner.class)
     public static class WriterTest extends IonHashTester {
         @Override
-        void traverse(IonReader reader, IonHasherProvider hasherProvider) throws IOException {
+        void traverse(IonReader reader, TestIonHasherProvider hasherProvider) throws IOException {
+            this.hasherProvider = hasherProvider;
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             IonWriter writer = ION.newTextWriter(baos);
             IonHashWriter ihw = new IonHashWriterImpl(writer, hasherProvider);
             ihw.writeValues(reader);
             ihw.close();
+        }
+    }
+
+    // digest cache tests
+
+    /**
+     * verifies that the final digest is correct when the digest cache is enabled;
+     * this is accomplished by converting the entries of the expectedHashLog into a
+     * single, "final_digest" assertion
+     */
+    @RunWith(IonHashRunner.class)
+    public static class DigestCacheTest extends WriterTest {
+        @Override
+        void traverse(IonReader reader, TestIonHasherProvider hasherProvider) throws IOException {
+            System.setProperty("ion-hash-java.useDigestCache", "true");
+            super.traverse(reader, hasherProvider);
+        }
+
+        @Override
+        IonSexp filterExpectedHashLog(IonSexp expectedHashLog) {
+            IonSexp finalDigestHashLog = ION.newSexp();
+            IonSexp finalDigest = (IonSexp)expectedHashLog.get(expectedHashLog.size() - 1).clone();
+            finalDigest.setTypeAnnotations("final_digest");
+            finalDigestHashLog.add(finalDigest);
+
+            return finalDigestHashLog;
         }
     }
 }

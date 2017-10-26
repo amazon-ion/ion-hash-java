@@ -13,18 +13,16 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.Map;
-import java.util.TreeSet;
-import java.util.WeakHashMap;
+import java.util.List;
 
 /**
- * Provides core hash functionality via update/digestScalar/stepIn/stepOut operations
- * for use by streaming hash readers and writers.  It relies on the binary
- * encoding implementation in IonRawBinaryWriter when possible.
+ * Provides core hash functionality for use by streaming hash readers and writers.
+ * It relies on the binary encoding implementation in IonRawBinaryWriter when possible.
  * <p/>
  * This class is not thread-safe.
  */
@@ -32,29 +30,20 @@ class Hasher implements Closeable {
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     private final IonHasherProvider hasherProvider;
-    private final ScalarHasher symbolHasher;
+    private final SymbolHasher symbolHasher;
     private final ScalarHasher scalarHasher;
 
     private final Deque<ContainerHasher> containerHasherStack = new ArrayDeque<>();
-
-    private final ByteArrayOutputStream baos;
-    private final IonWriter writer;
 
     Hasher(IonHasherProvider hasherProvider) {
         this.hasherProvider = hasherProvider;
 
         // cache for digests of symbols and common values
-        boolean useDigestCache = System.getProperty("ion-hash-java.useDigestCache", "true").equals("true");
-        Map<String,byte[]> digestCache = useDigestCache ? new WeakHashMap<>() : null;
-        this.symbolHasher = new ScalarHasher(digestCache);
-        this.scalarHasher = new ScalarHasher(digestCache);
+        DigestCache digestCache = System.getProperty("ion-hash-java.useDigestCache", "true").equals("true")
+                ? new DigestCache() : new DigestCache.NoOpDigestCache();
 
-        try {
-            this.baos = new ByteArrayOutputStream();
-            writer = PrivateIonHashTrampoline.newIonWriter(baos);
-        } catch (IOException e) {
-            throw new IonHashException(e);
-        }
+        this.symbolHasher = new SymbolHasher(hasherProvider.newHasher(), digestCache);
+        this.scalarHasher = new ScalarHasher(digestCache);
     }
 
     ScalarHasher scalar() {
@@ -85,78 +74,84 @@ class Hasher implements Closeable {
         return currentHash;
     }
 
-    // split representation and TQ parts;  also handles any special case binary cleanup
-    private byte[][] scalarOrNullSplitParts(IonType type, byte[] bytes) throws IOException {
-        int tl = bytes[0];
-        int offset = 1 + getLengthLength(bytes);
-
-        if (type == IonType.INT && bytes.length > offset) {
-            // ignore sign byte prepended by BigInteger.toByteArray() when the magnitude
-            // ends at byte boundary (the 'intLength512' test is an example of this)
-            if ((bytes[offset] & 0xFF) == 0) {
-                offset++;
-            }
-        }
-
-        // the representation is everything after TL and length
-        byte[] representation = Arrays.copyOfRange(bytes, offset, bytes.length);
-        byte tq = (tl & 0x0F) == 0x0F ? (byte)tl : (byte)(tl & 0xF0);
-
-        if (type == IonType.BOOL) {
-            tq = (byte)tl;
-        }
-
-        return new byte[][] { new byte[] {tq}, representation };
-    }
-
-    // TQ, representation
-    private byte[][] symbolParts(SymbolToken symbol) {
-        String text = symbol == null ? null : symbol.getText();
-        if (text == null && (symbol == null || symbol.getSid() != 0)) {
-            throw new IonHashException("Unable to resolve SID "
-                    + (symbol != null ? symbol.getSid() : "null"));
-        }
-
-        byte[] symbolBytes;
-        try {
-            byte tq = 0x70;
-            if (text == null && symbol.getSid() == 0) {
-                tq |= 0x01;
-            }
-            baos.reset();
-            writer.writeString(text);
-            writer.finish();
-            symbolBytes = baos.toByteArray();
-
-            int offset = 1 + getLengthLength(symbolBytes);
-            byte[] representation = Arrays.copyOfRange(symbolBytes, offset, symbolBytes.length);
-
-            return new byte[][] {new byte[] {tq}, representation};
-        } catch (IOException e) {
-            throw new IonHashException(e);
-        }
-    }
-
-    // returns a count of bytes in the "length" field
-    private int getLengthLength(byte[] arr) {
-        if ((arr[0] & 0x0F) == 0x0E) {
-            // read subsequent byte(s) as the "length" field
-            for (int i = 1; i < arr.length; i++) {
-                if ((arr[i] & 0x80) != 0) {
-                    return i;
-                }
-            }
-            throw new IllegalStateException("Problem while reading VarUInt!");
-        }
-        return 0;
-    }
-
     @Override
     public void close() throws IOException {
-        writer.close();
-        baos.close();
         symbolHasher.close();
         scalarHasher.close();
+    }
+
+
+    /**
+     * Centralizes logic for hashing symbols caching their digests;  this includes
+     * annotations, field names, and values that are symbols.
+     */
+    private static final byte[] SYMBOL_TQ      = new byte[] {0x70};
+    private static final byte[] SYMBOL_TQ_SID0 = new byte[] {0x71};
+    class SymbolHasher implements Closeable {
+        private final IonHasher hasher;
+        private final ByteArrayOutputStream baos;
+        private final IonWriter writer;
+        private final DigestCache digestCache;
+
+        private SymbolHasher(IonHasher hasher, DigestCache digestCache) {
+            this.hasher = hasher;
+
+            try {
+                this.baos = new ByteArrayOutputStream();
+                writer = PrivateIonHashTrampoline.newIonWriter(baos);
+            } catch (IOException e) {
+                throw new IonHashException(e);
+            }
+
+            this.digestCache = digestCache;
+        }
+
+        // TQ, representation
+        private byte[][] symbolParts(SymbolToken symbol) {
+            String text = symbol == null ? null : symbol.getText();
+            if (text == null && (symbol == null || symbol.getSid() != 0)) {
+                throw new IonHashException("Unable to resolve SID "
+                        + (symbol != null ? symbol.getSid() : "null"));
+            }
+
+            byte[] symbolBytes;
+            try {
+                byte[] tq = SYMBOL_TQ;
+                if (text == null && symbol.getSid() == 0) {
+                    tq  = SYMBOL_TQ_SID0;
+                }
+                baos.reset();
+                writer.writeString(text);
+                writer.finish();
+                symbolBytes = baos.toByteArray();
+
+                int offset = 1 + getLengthLength(symbolBytes);
+                byte[] representation = Arrays.copyOfRange(symbolBytes, offset, symbolBytes.length);
+
+                return new byte[][] {tq, representation};
+            } catch (IOException e) {
+                throw new IonHashException(e);
+            }
+        }
+
+        private byte[] digest(SymbolToken symbol) {
+            String key = digestCache.getKey(IonType.SYMBOL, symbol);
+            byte[] digest = digestCache.get(key);
+            if (digest == null) {
+                byte[][] parts = symbolParts(symbol);
+                hasher.update(parts[0]);
+                hasher.update(parts[1]);
+                digest = hasher.digest();
+                digestCache.put(key, digest);
+            }
+
+            return digest;
+        }
+
+        public void close() throws IOException {
+            writer.close();
+            baos.close();
+        }
     }
 
     /**
@@ -181,27 +176,23 @@ class Hasher implements Closeable {
         }
 
         void prepare() {
-            try {
-                if (fieldName != null) {
-                    if (fieldHasher == null) {
-                        fieldHasher = hasherProvider.newHasher();
-                    }
-                    byte[] fieldNameHash = symbolHasher.digestSymbolToken(fieldName, false);
-                    fieldHasher.update(fieldNameHash);
+            if (fieldName != null) {
+                if (fieldHasher == null) {
+                    fieldHasher = hasherProvider.newHasher();
+                }
+                byte[] fieldNameHash = symbolHasher.digest(fieldName);
+                fieldHasher.update(fieldNameHash);
+            }
+
+            if (annotations != null && annotations.length > 0) {
+                if (annotationHasher == null) {
+                    annotationHasher = hasherProvider.newHasher();
                 }
 
-                if (annotations != null && annotations.length > 0) {
-                    if (annotationHasher == null) {
-                        annotationHasher = hasherProvider.newHasher();
-                    }
-
-                    annotationHasher.update(new byte[] {(byte)0xE0});
-                    for (SymbolToken annotation : annotations) {
-                        annotationHasher.update(symbolHasher.digestSymbolToken(annotation, false));
-                    }
+                annotationHasher.update(new byte[] {(byte)0xE0});
+                for (SymbolToken annotation : annotations) {
+                    annotationHasher.update(symbolHasher.digest(annotation));
                 }
-            } catch (IOException e) {
-                throw new IonHashException(e);
             }
         }
 
@@ -210,21 +201,32 @@ class Hasher implements Closeable {
             hasher.update(bytes);
         }
 
+        byte[] valueDigest() {
+            return hasher.digest();
+        }
+
         @Override
         public byte[] digest() {
-            byte[] hash = hasher.digest();
+            return digest(null);
+        }
+
+        byte[] digest(byte[] valueDigest) {
+            byte[] digest = valueDigest;
+            if (digest == null) {
+                digest = hasher.digest();
+            }
 
             if (annotations != null && annotations.length > 0) {
-                annotationHasher.update(hash);
-                hash = annotationHasher.digest();
+                annotationHasher.update(digest);
+                digest = annotationHasher.digest();
             }
 
             if (fieldName != null) {
-                fieldHasher.update(hash);
-                hash = fieldHasher.digest();
+                fieldHasher.update(digest);
+                digest = fieldHasher.digest();
             }
 
-            return hash;
+            return digest;
         }
 
         void hashParts(byte[][] parts) {
@@ -273,7 +275,7 @@ class Hasher implements Closeable {
      * Collects and sorts hashes of struct fields before providing a digest.
      */
     class StructHasher extends ContainerHasher {
-        private final Collection<byte[]> hashes = new TreeSet<>(BYTE_ARRAY_COMPARATOR);
+        private final List<byte[]> hashes = new ArrayList<>();
 
         StructHasher(SymbolToken fieldName, SymbolToken[] annotations) {
             super(IonType.STRUCT, fieldName, annotations);
@@ -286,6 +288,7 @@ class Hasher implements Closeable {
 
         @Override
         public byte[] digest() {
+            Collections.sort(hashes, BYTE_ARRAY_COMPARATOR);
             for(byte[] hash : hashes) {
                 hasher.update(hash);
             }
@@ -299,9 +302,9 @@ class Hasher implements Closeable {
     class ScalarHasher extends AbstractHasher implements Closeable {
         private final IonWriter scalarWriter;
         private final ByteArrayOutputStream scalarBaos;
-        private final Map<String,byte[]> digestCache;
+        private final DigestCache digestCache;
 
-        ScalarHasher(Map<String,byte[]> digestCache) {
+        ScalarHasher(DigestCache digestCache) {
             super(hasherProvider.newHasher(), hasherProvider.newHasher());
 
             try {
@@ -333,9 +336,9 @@ class Hasher implements Closeable {
         }
 
         byte[] digestBool(boolean value) throws IOException {
-            return cachingDigestScalar(IonType.BOOL,
-                    () -> value+"",
-                    () -> scalarWriter.writeBool(value));
+            return digestScalar(IonType.BOOL,
+                    () -> scalarWriter.writeBool(value),
+                    () -> value+"");
         }
 
         byte[] digestClob(byte[] value) throws IOException {
@@ -369,9 +372,9 @@ class Hasher implements Closeable {
         }
 
         byte[] digestNull(IonType type) throws IOException {
-            return cachingDigestScalar(type,
-                    () -> type != null ? type.toString() : IonType.NULL.toString(),
-                    () -> scalarWriter.writeNull(type));
+            return digestScalar(type,
+                    () -> scalarWriter.writeNull(type),
+                    () -> null);
         }
 
         byte[] digestString(String value) throws IOException {
@@ -383,25 +386,9 @@ class Hasher implements Closeable {
         }
 
         byte[] digestSymbolToken(SymbolToken value) throws IOException {
-            return digestSymbolToken(value, true);
-        }
-
-        byte[] digestSymbolToken(SymbolToken value, boolean updateContainer) throws IOException {
-            String digestCacheKey = null;
-            byte[] digest = null;
-            if (digestCache != null && value.getText() != null) {
-                digestCacheKey = getDigestCacheKey(IonType.SYMBOL, value.getText());
-                digest = digestCache.get(digestCacheKey);
-            }
-
-            if (digest == null) {
-                hashParts(symbolParts(value));
-            }
-            digest = digest(digest, updateContainer);
-
-            if (digestCacheKey != null && digest != null) {
-                digestCache.put(digestCacheKey, digest);
-            }
+            byte[] valueDigest = symbolHasher.digest(value);
+            byte[] digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
+            updateContainer(digest);
             return digest;
         }
 
@@ -409,57 +396,71 @@ class Hasher implements Closeable {
             return digestScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
         }
 
-        private byte[] cachingDigestScalar(IonType ionType, CacheableValue cacheableValue, Updatable scalarUpdater) throws IOException {
-            String digestCacheKey = null;
-            byte[] digest = null;
-            if (digestCache != null) {
-                digestCacheKey = getDigestCacheKey(ionType, cacheableValue.valueToString());
-                digest = digestCache.get(digestCacheKey);
-            }
+        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
+            return digestScalar(ionType, scalarUpdater, null);
+        }
 
-            if (digest == null) {
-                digest = digestScalar(ionType, scalarUpdater);
+        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater, CacheableValue cacheableValue) throws IOException {
+            byte[] digest;
+            if (cacheableValue != null) {
+                String key = digestCache.getKey(ionType, cacheableValue.valueToString());
+                byte[] valueDigest = digestCache.get(key);
+                if (valueDigest == null) {
+                    writeScalar(ionType, scalarUpdater);
+                    valueDigest = valueDigest();
+                    digestCache.put(key, valueDigest);
+                }
+                digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
             } else {
-                digest = digest(digest, true);
+                writeScalar(ionType, scalarUpdater);
+                digest = digest();
             }
 
-            if (digestCacheKey != null && digest != null) {
-                digestCache.put(digestCacheKey, digest);
-            }
+            updateContainer(digest);
             return digest;
         }
 
-        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
+        private void writeScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
             scalarBaos.reset();
             scalarUpdater.update();
             scalarWriter.finish();
             hashParts(scalarOrNullSplitParts(ionType, scalarBaos.toByteArray()));
-            return digest();
         }
 
-        public byte[] digest() {
-            return digest(null, true);
-        }
-
-        private byte[] digest(byte[] cachedDigest, boolean updateContainer) {
-            byte[] digest = cachedDigest;
-            if (digest == null) {
-                digest = super.digest();
-            }
-            if (updateContainer && !containerHasherStack.isEmpty()) {
+        private void updateContainer(byte[] digest) {
+            if (!containerHasherStack.isEmpty()) {
                 containerHasherStack.peekFirst().update(digest);
             }
-            return digest;
-        }
-
-        private String getDigestCacheKey(IonType ionType, String value) {
-            return new StringBuilder().append(ionType.ordinal()).append(".").append(value).toString();
         }
 
         @Override
         public void close() throws IOException {
             scalarWriter.close();
             scalarBaos.close();
+        }
+
+        // split representation and TQ parts;  also handles any special case binary cleanup
+        private byte[][] scalarOrNullSplitParts(IonType type, byte[] bytes) throws IOException {
+            int tl = bytes[0];
+            int offset = 1 + getLengthLength(bytes);
+
+            if (type == IonType.INT && bytes.length > offset) {
+                // ignore sign byte prepended by BigInteger.toByteArray() when the magnitude
+                // ends at byte boundary (the 'intLength512' test is an example of this)
+                if ((bytes[offset] & 0xFF) == 0) {
+                    offset++;
+                }
+            }
+
+            // the representation is everything after TL and length
+            byte[] representation = Arrays.copyOfRange(bytes, offset, bytes.length);
+            byte tq = (tl & 0x0F) == 0x0F ? (byte)tl : (byte)(tl & 0xF0);
+
+            if (type == IonType.BOOL) {
+                tq = (byte)tl;
+            }
+
+            return new byte[][] { new byte[] {tq}, representation };
         }
     }
 
@@ -503,5 +504,19 @@ class Hasher implements Closeable {
                 return -1;
             }
         };
+    }
+
+    // returns a count of bytes in the "length" field
+    private static int getLengthLength(byte[] arr) {
+        if ((arr[0] & 0x0F) == 0x0E) {
+            // read subsequent byte(s) as the "length" field
+            for (int i = 1; i < arr.length; i++) {
+                if ((arr[i] & 0x80) != 0) {
+                    return i;
+                }
+            }
+            throw new IllegalStateException("Problem while reading VarUInt!");
+        }
+        return 0;
     }
 }
