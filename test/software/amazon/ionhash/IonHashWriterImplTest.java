@@ -62,7 +62,6 @@ public class IonHashWriterImplTest {
         ihw.addTypeAnnotation("hash");
         ihw.writeSymbol("world");
         assertArrayEquals(new byte[] {
-                (byte)0x70, 0x68, 0x65, 0x6C, 0x6C, 0x6F,   // hello:
                 (byte)0xE0, 0x70, 0x69, 0x6F, 0x6E,         // ion::
                             0x70, 0x68, 0x61, 0x73, 0x68,   // hash::
                       0x70, 0x77, 0x6F, 0x72, 0x6C, 0x64},  // world

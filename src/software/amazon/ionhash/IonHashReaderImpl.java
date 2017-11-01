@@ -64,35 +64,35 @@ class IonHashReaderImpl implements IonHashReader {
                     // update such that currentHash always represents
                     // the hash of the value we just "nexted" past
                     if (isNullValue()) {
-                        currentHash = hasher.scalar().digestNull(ionType);
+                        currentHash = hasher.scalar().digestNull(ionType).annotatedValue();
                     } else {
                         switch (ionType) {
                             case BLOB:
-                                currentHash = hasher.scalar().digestBlob(newBytes());
+                                currentHash = hasher.scalar().digestBlob(newBytes()).annotatedValue();
                                 break;
                             case BOOL:
-                                currentHash = hasher.scalar().digestBool(booleanValue());
+                                currentHash = hasher.scalar().digestBool(booleanValue()).annotatedValue();
                                 break;
                             case CLOB:
-                                currentHash = hasher.scalar().digestClob(newBytes());
+                                currentHash = hasher.scalar().digestClob(newBytes()).annotatedValue();
                                 break;
                             case DECIMAL:
-                                currentHash = hasher.scalar().digestDecimal(decimalValue());
+                                currentHash = hasher.scalar().digestDecimal(decimalValue()).annotatedValue();
                                 break;
                             case FLOAT:
-                                currentHash = hasher.scalar().digestFloat(doubleValue());
+                                currentHash = hasher.scalar().digestFloat(doubleValue()).annotatedValue();
                                 break;
                             case INT:
-                                currentHash = hasher.scalar().digestInt(bigIntegerValue());
+                                currentHash = hasher.scalar().digestInt(bigIntegerValue()).annotatedValue();
                                 break;
                             case STRING:
-                                currentHash = hasher.scalar().digestString(stringValue());
+                                currentHash = hasher.scalar().digestString(stringValue()).annotatedValue();
                                 break;
                             case SYMBOL:
-                                currentHash = hasher.scalar().digestSymbolToken(symbolValue());
+                                currentHash = hasher.scalar().digestSymbolToken(symbolValue()).annotatedValue();
                                 break;
                             case TIMESTAMP:
-                                currentHash = hasher.scalar().digestTimestamp(timestampValue());
+                                currentHash = hasher.scalar().digestTimestamp(timestampValue()).annotatedValue();
                                 break;
                             default:
                                 throw new IonHashException("Unsupported IonType (" + ionType + ")");
@@ -124,7 +124,7 @@ class IonHashReaderImpl implements IonHashReader {
         // ensure we consume the rest of it in order to compute currentHash correctly
         consumeRemainder();
 
-        currentHash = hasher.stepOut();
+        currentHash = hasher.stepOut().annotatedValue();
         delegate.stepOut();
     }
 
@@ -143,11 +143,7 @@ class IonHashReaderImpl implements IonHashReader {
 
     @Override
     public void close() throws IOException {
-        try {
-            hasher.close();
-        } catch (Exception e) {
-        }
-        delegate.close();
+        hasher.close();
     }
 
 
