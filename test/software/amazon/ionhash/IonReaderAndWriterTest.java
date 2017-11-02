@@ -12,7 +12,7 @@ import software.amazon.ion.system.IonSystemBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertArrayEquals;
+import static software.amazon.ionhash.TestUtil.assertEquals;
 
 public class IonReaderAndWriterTest {
     private static IonSystem ION = IonSystemBuilder.standard().build();
@@ -126,23 +126,5 @@ public class IonReaderAndWriterTest {
         reader.close();
 
         assertEquals(writeHash, readHash);
-    }
-
-    private static void assertEquals(byte[] expected, byte[] actual) {
-        try {
-            assertArrayEquals(expected, actual);
-        } catch (AssertionError e) {
-            System.out.println("expected: " + bytesToHex(expected));
-            System.out.println("  actual: " + bytesToHex(actual));
-            throw e;
-        }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x ", b));
-        }
-        return sb.toString();
     }
 }
