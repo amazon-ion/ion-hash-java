@@ -10,48 +10,58 @@ import java.util.WeakHashMap;
  * Simple cache for digests of symbols and select primitives (e.g., nulls, booleans).
  */
 class DigestCache {
-    private final Map<String,byte[]> cache = new WeakHashMap<>();
+    private final byte[][] boolCache = new byte[2][];
+    private final byte[][] nullCache = new byte[IonType.values().length][];
+    private final Map<String,byte[]> symbolCache = new WeakHashMap<>();
 
-    final byte[] get(String key) {
-        if (key == null) {
-            return null;
-        }
-        return cache.get(key);
+    final byte[] getBool(boolean bool) {
+        return bool ? boolCache[1] : boolCache[0];
     }
 
-    void put(String key, byte[] digest) {
-        if (key == null) {
-            return;
-        }
-        cache.put(key, digest);
+    final byte[] getNull(IonType ionType) {
+        return nullCache[ionType.ordinal()];
     }
 
-    final String getKey(IonType ionType, SymbolToken symbol) {
+    final byte[] getSymbol(SymbolToken symbol) {
         if (symbol == null || symbol.getText() == null) {
             return null;
         }
-        return getKey(ionType, symbol.getText());
+        return symbolCache.get(symbol.getText());
     }
 
-    final String getKey(IonType ionType, String value) {
-        return value == null
-                ? new StringBuilder()
-                        .append(IonType.NULL.ordinal())
-                        .append(".")
-                        .append(ionType.toString()).toString()
-                : new StringBuilder()
-                        .append(ionType.ordinal())
-                        .append(".")
-                        .append(value).toString();
+    void putBool(boolean bool, byte[] digest) {
+        if (bool) {
+            boolCache[1] = digest;
+        } else {
+            boolCache[0] = digest;
+        }
     }
 
+    void putNull(IonType ionType, byte[] digest) {
+        nullCache[ionType.ordinal()] = digest;
+    }
+
+    void putSymbol(SymbolToken symbol, byte[] digest) {
+        if (symbol == null || symbol.getText() == null) {
+            return;
+        }
+        symbolCache.put(symbol.getText(), digest);
+    }
 
     /**
      * A no-op extension of DigestCache.
      */
     final static class NoOpDigestCache extends DigestCache {
         @Override
-        final void put(String key, byte[] digest) {
+        final void putBool(boolean bool, byte[] digest) {
+        }
+
+        @Override
+        final void putNull(IonType ionType, byte[] digest) {
+        }
+
+        @Override
+        final void putSymbol(SymbolToken symbol, byte[] digest) {
         }
     }
 }
