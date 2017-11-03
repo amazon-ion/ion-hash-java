@@ -7,13 +7,10 @@ import static org.junit.Assert.assertArrayEquals;
  */
 class TestUtil {
     static void assertEquals(byte[] expected, byte[] actual) {
-        try {
-            assertArrayEquals(expected, actual);
-        } catch (AssertionError e) {
-            System.out.println("expected: " + bytesToHex(expected));
-            System.out.println("  actual: " + bytesToHex(actual));
-            throw e;
-        }
+        assertArrayEquals(
+                  "expected: " + bytesToHex(expected) + System.getProperty("line.separator")
+                + "  actual: " + bytesToHex(actual),
+                expected, actual);
     }
 
     private static String bytesToHex(byte[] bytes) {
