@@ -1,5 +1,6 @@
 package software.amazon.ionhash;
 
+import software.amazon.ion.IonBool;
 import software.amazon.ion.IonContainer;
 import software.amazon.ion.IonInt;
 import software.amazon.ion.IonReader;
@@ -67,6 +68,10 @@ public class IonHashRunner extends Runner {
                     testName = annotations[0];
                 }
 
+                IonBool useDigestCacheBool = (IonBool)test.get("useDigestCache");
+                boolean useDigestCache = useDigestCacheBool != null ? useDigestCacheBool.booleanValue() : false;
+                System.setProperty("ion-hash-java.useDigestCache", useDigestCache+"");
+
                 IonStruct expect = (IonStruct)test.get("expect");
                 Iterator<IonValue> expectIter = expect.iterator();
                 while(expectIter.hasNext()) {
@@ -107,11 +112,10 @@ public class IonHashRunner extends Runner {
                     ? testObject.getIonReader(ionText.toPrettyString())
                     : testObject.getIonReader(containerToBytes((IonContainer) ionBinary));
 
-            IonHashReader ihr = new IonHashReaderImpl(reader, hasherProvider);
-            testObject.traverse(ihr);
-            ihr.close();
+            testObject.traverse(reader, hasherProvider);
 
-            IonSexp actualHashLog = hasherProvider.getHashLog();
+            IonSexp actualHashLog = testObject.getHashLog();
+            expectedHashLog = testObject.filterExpectedHashLog(expectedHashLog);
             IonSexp actualHashLogFiltered = filterHashLog(actualHashLog, expectedHashLog);
             assertEquals(
                 hashLogToString(expectedHashLog),
