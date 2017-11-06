@@ -12,7 +12,7 @@ import software.amazon.ion.system.IonSystemBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertArrayEquals;
+import static software.amazon.ionhash.TestUtil.assertEquals;
 
 public class IonReaderAndWriterTest {
     private static IonSystem ION = IonSystemBuilder.standard().build();
@@ -51,7 +51,7 @@ public class IonReaderAndWriterTest {
         ihw.stepIn(IonType.STRUCT);
           ihw.setFieldName("field_name");
           ihw.writeValue(reader);
-          byte[] actual = ihw.currentHash();
+          byte[] actual = ihw.digest();
           assertEquals(expected, actual);
         ihw.stepOut();
 
@@ -73,7 +73,7 @@ public class IonReaderAndWriterTest {
                   .build();
           ihr.next();
           ihr.next();
-          actual = ihr.currentHash();
+          actual = ihr.digest();
           assertEquals(expected, actual);
         ihr.close();
         reader.close();
@@ -83,11 +83,11 @@ public class IonReaderAndWriterTest {
 
     @Test
     public void regression_fieldNameAsymmetry() throws IOException {
-        // regression:  reader.currentHash() incorrectly incorporated the fieldName of a value in a struct,
+        // regression:  reader.digest() incorrectly incorporated the fieldName of a value in a struct,
         // such that if an IonHashWriter never saw the fieldName, hashes would not match
         //
-        // addressed by updating reader/writer currentHash() behavior to not incorporate the fieldName;
-        // note that upon stepping out of a struct, currentHash() MUST incorporate fieldNames from the fields
+        // addressed by updating reader/writer digest() behavior to not incorporate the fieldName;
+        // note that upon stepping out of a struct, digest() MUST incorporate fieldNames from the fields
         //
         // I believe this test is redundant with test_noFieldNameInCurrentHash;  retaining it
         // to ensure we don't regress to customer-observed asymmetry.  --pcornell@, 2017-11-01
@@ -107,7 +107,7 @@ public class IonReaderAndWriterTest {
             ihw.setFieldName("b");
             ihw.writeInt(1);
           ihw.stepOut();
-          byte[] writeHash = ihw.currentHash();
+          byte[] writeHash = ihw.digest();
           ihw.close();
         writer.stepOut();
         writer.close();
@@ -121,28 +121,10 @@ public class IonReaderAndWriterTest {
                 .build();
         ihr.next();
         ihr.next();
-        byte[] readHash = ihr.currentHash();
+        byte[] readHash = ihr.digest();
         ihr.close();
         reader.close();
 
         assertEquals(writeHash, readHash);
-    }
-
-    private static void assertEquals(byte[] expected, byte[] actual) {
-        try {
-            assertArrayEquals(expected, actual);
-        } catch (AssertionError e) {
-            System.out.println("expected: " + bytesToHex(expected));
-            System.out.println("  actual: " + bytesToHex(actual));
-            throw e;
-        }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x ", b));
-        }
-        return sb.toString();
     }
 }

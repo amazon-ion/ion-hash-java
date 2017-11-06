@@ -18,5 +18,5 @@ public interface IonHashWriter extends IonWriter {
      * @return array of bytes representing the hash of the IonValue just
      * written or stepped out of;  if there is no hash, returns an empty array
      */
-    byte[] currentHash();
+    byte[] digest();
 }

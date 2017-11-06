@@ -47,6 +47,7 @@ public class IonHashTestSuite {
             this.hasherProvider = hasherProvider;
             IonHashReader ihr = new IonHashReaderImpl(reader, hasherProvider);
             traverse(ihr);
+            ihr.digest();
             ihr.close();
         }
 
@@ -164,6 +165,7 @@ public class IonHashTestSuite {
             IonWriter writer = ION.newTextWriter(baos);
             IonHashWriter ihw = new IonHashWriterImpl(writer, hasherProvider);
             ihw.writeValues(reader);
+            ihw.digest();
             ihw.close();
         }
     }

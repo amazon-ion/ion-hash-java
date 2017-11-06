@@ -22,5 +22,5 @@ public interface IonHashReader extends IonReader {
      * @return array of bytes representing the hash of the IonValue just
      * nexted past;  if there is no hash, returns an empty array
      */
-    byte[] currentHash();
+    byte[] digest();
 }

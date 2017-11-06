@@ -30,56 +30,85 @@ import java.util.List;
  * This class is not thread-safe.
  */
 class Hasher implements Closeable {
-    private static final byte[] TQ_SYMBOL      = new byte[] {      0x70};
-    private static final byte[] TQ_SYMBOL_SID0 = new byte[] {      0x71};
-    private static final byte[] TQ_LIST        = new byte[] {(byte)0xB0};
-    private static final byte[] TQ_SEXP        = new byte[] {(byte)0xC0};
-    private static final byte[] TQ_STRUCT      = new byte[] {(byte)0xD0};
-    static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+    private static final byte DELIMITER_BYTE         = (byte)0xEF;
+    private static final byte DELIMITER_ESCAPE_BYTE  = DELIMITER_BYTE;
+    private static final byte[] VALUE_DELIMITER      = new byte[] {DELIMITER_BYTE};
+
+    private static final byte[] TQ_SYMBOL            = new byte[] {      0x70};
+    private static final byte[] TQ_SYMBOL_SID0       = new byte[] {      0x71};
+    private static final byte[] TQ_LIST              = new byte[] {(byte)0xB0};
+    private static final byte[] TQ_SEXP              = new byte[] {(byte)0xC0};
+    private static final byte[] TQ_STRUCT            = new byte[] {(byte)0xD0};
+    private static final byte[] TQ_ANNOTATED_VALUE   = new byte[] {(byte)0xE0};
+
+    static final byte[] EMPTY_BYTE_ARRAY             = new byte[0];
+
+    private static final byte[][] FLOAT_POSITIVE_ZERO_PARTS = new byte[][] {new byte[] {0x40}};
 
     private final IonHasherProvider hasherProvider;
+    private final IonHasher hasher;
     private final SymbolHasher symbolHasher;
     private final ScalarHasher scalarHasher;
-
     private final Deque<ContainerHasher> containerHasherStack = new ArrayDeque<>();
 
     Hasher(IonHasherProvider hasherProvider) {
         this.hasherProvider = hasherProvider;
-
-        // cache for digests of symbols and common values
-        DigestCache digestCache = System.getProperty("ion-hash-java.useDigestCache", "true").equals("true")
-                ? new DigestCache() : new DigestCache.NoOpDigestCache();
-
-        this.symbolHasher = new SymbolHasher(hasherProvider.newHasher(), digestCache);
-        this.scalarHasher = new ScalarHasher(digestCache);
+        this.hasher = hasherProvider.newHasher();
+        this.symbolHasher = new SymbolHasher();
+        this.scalarHasher = new ScalarHasher(hasher);
     }
 
     ScalarHasher scalar() {
         return scalarHasher;
     }
 
-    void stepIn(IonType containerType, SymbolToken fieldName, SymbolToken[] annotations) {
-        ContainerHasher hasher = containerType == IonType.STRUCT
-                ? new StructHasher(fieldName, annotations)
-                : new ContainerHasher(containerType, fieldName, annotations);
-
-        hasher.prepare();
-
-        containerHasherStack.addFirst(hasher);
+    IonHasher currentHasher() {
+        if (!containerHasherStack.isEmpty()) {
+            return containerHasherStack.peekFirst().hasher();
+        }
+        return hasher;
     }
 
-    Digest stepOut() {
+    IonHasher currentChildHasher() {
+        if (!containerHasherStack.isEmpty()) {
+            return containerHasherStack.peekFirst().childHasher();
+        }
+        return hasher;
+    }
+
+
+    void stepIn(IonType containerType, SymbolToken fieldName, SymbolToken[] annotations) {
+        ContainerHasher containerHasher;
+        if (containerType == IonType.STRUCT) {
+            containerHasher = new StructHasher(currentChildHasher(), fieldName, annotations);
+        } else {
+            containerHasher = new ContainerHasher(currentChildHasher(), containerType, fieldName, annotations);
+        }
+
+        containerHasherStack.addFirst(containerHasher);
+        scalarHasher.withHasher(currentChildHasher());
+    }
+
+    void stepOut() {
         if (containerHasherStack.isEmpty()) {
             throw new IllegalStateException("Cannot stepOut any further, already at top level.");
         }
 
-        Digest digest = containerHasherStack.pop().digest();
+        ContainerHasher containerHasher = containerHasherStack.pop();
+        containerHasher.finish();
 
         if (!containerHasherStack.isEmpty()) {
-            containerHasherStack.peekFirst().update(digest.fieldNameAnnotatedValue());
+            ContainerHasher ch = containerHasherStack.peekFirst();
+            if (ch instanceof StructHasher) {
+                ch.updateWithDigest(containerHasher.hasher().digest());
+            }
         }
+        scalarHasher.withHasher(currentChildHasher());
+    }
 
-        return digest;
+    byte[] digest() {
+        // TBD can we enforce that this is only called at an appropriate time?
+        return currentHasher().digest();
     }
 
     @Override
@@ -90,29 +119,23 @@ class Hasher implements Closeable {
 
 
     /**
-     * Centralizes logic for hashing symbols caching their digests;  this includes
+     * Centralizes logic for constructing the bytes for symbols;  this includes
      * annotations, field names, and values that are symbols.
      */
     class SymbolHasher implements Closeable {
-        private final IonHasher hasher;
         private final ByteArrayOutputStream baos;
         private final IonWriter writer;
-        private final DigestCache digestCache;
 
-        private SymbolHasher(IonHasher hasher, DigestCache digestCache) {
-            this.hasher = hasher;
-
+        private SymbolHasher() {
             try {
                 this.baos = new ByteArrayOutputStream();
                 writer = PrivateIonHashTrampoline.newIonWriter(baos);
             } catch (IOException e) {
                 throw new IonHashException(e);
             }
-
-            this.digestCache = digestCache;
         }
 
-        // TQ, representation
+        // returns TQ, representation
         private byte[][] symbolParts(SymbolToken symbol) {
             String text = symbol == null ? null : symbol.getText();
             if (text == null && (symbol == null || symbol.getSid() != 0)) {
@@ -140,19 +163,6 @@ class Hasher implements Closeable {
             }
         }
 
-        private byte[] digest(SymbolToken symbol) {
-            byte[] digest = digestCache.getSymbol(symbol);
-            if (digest == null) {
-                byte[][] parts = symbolParts(symbol);
-                hasher.update(parts[0]);
-                hasher.update(parts[1]);
-                digest = hasher.digest();
-                digestCache.putSymbol(symbol, digest);
-            }
-
-            return digest;
-        }
-
         public void close() throws IOException {
             writer.close();
             baos.close();
@@ -160,121 +170,73 @@ class Hasher implements Closeable {
     }
 
     /**
-     * Lightweight, reusable value class that represent various hashes of a value.  For field 'a' in
-     * the following struct:
-     * <pre>
-     *   {
-     *     a:annot::5
-     *   }
-     * </pre>
-     * <ul>
-     *   <li>value represents the hash of:  5
-     *   <li>annotatedValue represents the hash of:  annot::5
-     *   <li>fieldNameAnnotatedValue represents the hash of:  a:annot::5
-     * </ul>
-     */
-    static class Digest {
-        private byte[] value;
-        private byte[] annotatedValue;
-        private byte[] fieldNameAnnotatedValue;
-
-        byte[] value() {
-            return value;
-        }
-
-        byte[] annotatedValue() {
-            return annotatedValue;
-        }
-
-        byte[] fieldNameAnnotatedValue() {
-            return fieldNameAnnotatedValue;
-        }
-    }
-
-    /**
      * Centralizes fieldname and annotation handling for scalar and container values.
      */
     private abstract class AbstractHasher {
+        IonHasher hasher;
         SymbolToken fieldName;
         SymbolToken[] annotations;
-        Digest digest = new Digest();
 
-        final IonHasher hasher = hasherProvider.newHasher();
-        private IonHasher fieldHasher;
-        private IonHasher annotationHasher;
-
-        private AbstractHasher(SymbolToken fieldName, SymbolToken[] annotations) {
+        private AbstractHasher(IonHasher hasher, SymbolToken fieldName, SymbolToken[] annotations) {
+            this.hasher = hasher;
             this.fieldName = fieldName;
             this.annotations = annotations;
+
+            prepare();
         }
 
-        private AbstractHasher(IonHasher fieldHasher, IonHasher annotationHasher) {
-            this.fieldHasher = fieldHasher;
-            this.annotationHasher = annotationHasher;
-        }
+        final void prepare() {
+            if (!containerHasherStack.isEmpty() && fieldName != null) {
+                updateDelimiter();
 
-        void prepare() {
-            if (fieldName != null) {
-                if (fieldHasher == null) {
-                    fieldHasher = hasherProvider.newHasher();
-                }
-                byte[] fieldNameHash = symbolHasher.digest(fieldName);
-                fieldHasher.update(fieldNameHash);
+                updateDelimiter();
+                updateTQandRepresentation(symbolHasher.symbolParts(fieldName));
+                updateDelimiter();
             }
 
             if (annotations != null && annotations.length > 0) {
-                if (annotationHasher == null) {
-                    annotationHasher = hasherProvider.newHasher();
-                }
-
-                annotationHasher.update(new byte[] {(byte)0xE0});
+                updateDelimiter();
+                hasher.update(TQ_ANNOTATED_VALUE);
                 for (SymbolToken annotation : annotations) {
-                    annotationHasher.update(symbolHasher.digest(annotation));
+                    updateDelimiter();
+                    updateTQandRepresentation(symbolHasher.symbolParts(annotation));
+                    updateDelimiter();
                 }
             }
         }
 
-        public void update(byte[] bytes) {
-            hasher.update(bytes);
+        final IonHasher hasher() {
+            return hasher;
         }
 
-        byte[] valueDigest() {
-            return hasher.digest();
+        final void updateDelimiter() {
+            hasher.update(VALUE_DELIMITER);
         }
 
-        Digest digest() {
-            return digest(null);
-        }
+        final void updateTQandRepresentation(byte[][] tqAndRepresentation) {
+            byte[] tq = tqAndRepresentation[0];
+            hasher.update(tq);
 
-        Digest digest(byte[] valueDigest) {
-            if (valueDigest != null) {
-                digest.value = valueDigest;
-            } else {
-                digest.value = hasher.digest();
+            if (tqAndRepresentation.length == 2) {
+                byte[] representation = tqAndRepresentation[1];
+                if (representation.length > 0) {
+                    hasher.update(escape(representation));
+                }
             }
+        }
 
+        void updateWithDigest(byte[] bytes) {
+            hasher.update(escape(bytes));
+        }
+
+        // impl assumes this method is called AFTER this object is removed from the containerHasherStack (if present)
+        void finish() {
             if (annotations != null && annotations.length > 0) {
-                annotationHasher.update(digest.value);
-                digest.annotatedValue = annotationHasher.digest();
-            } else {
-                digest.annotatedValue = digest.value;
+                updateDelimiter();
             }
 
-            if (fieldName != null) {
-                fieldHasher.update(digest.annotatedValue);
-                digest.fieldNameAnnotatedValue = fieldHasher.digest();
-            } else {
-                digest.fieldNameAnnotatedValue = digest.annotatedValue;
-            }
-
-            return digest;
-        }
-
-        void hashParts(byte[][] parts) {
-            for (byte[] part : parts) {
-                if (part.length > 0) {
-                    update(part);
-                }
+            if (!containerHasherStack.isEmpty() && fieldName != null) {
+                updateDelimiter();
             }
         }
     }
@@ -285,15 +247,12 @@ class Hasher implements Closeable {
     class ContainerHasher extends AbstractHasher {
         private IonType ionType;
 
-        ContainerHasher(IonType ionType, SymbolToken fieldName, SymbolToken[] annotations) {
-            super(fieldName, annotations);
+        ContainerHasher(IonHasher hasher, IonType ionType, SymbolToken fieldName, SymbolToken[] annotations) {
+            super(hasher, fieldName, annotations);
             assert IonType.isContainer(ionType);
             this.ionType = ionType;
-        }
 
-        @Override
-        void prepare() {
-            super.prepare();
+            updateDelimiter();
             switch (ionType) {
                 case LIST:
                     hasher.update(TQ_LIST);
@@ -308,6 +267,16 @@ class Hasher implements Closeable {
                     throw new IonHashException("Unexpected container type " + ionType);
             }
         }
+
+        IonHasher childHasher() {
+            return hasher;
+        }
+
+        @Override
+        void finish() {
+            super.finish();
+            updateDelimiter();
+        }
     }
 
     /**
@@ -315,45 +284,52 @@ class Hasher implements Closeable {
      */
     class StructHasher extends ContainerHasher {
         private final List<byte[]> hashes = new ArrayList<>();
+        private final IonHasher childHasher;
 
-        StructHasher(SymbolToken fieldName, SymbolToken[] annotations) {
-            super(IonType.STRUCT, fieldName, annotations);
+        StructHasher(IonHasher hasher, SymbolToken fieldName, SymbolToken[] annotations) {
+            super(hasher, IonType.STRUCT, fieldName, annotations);
+            childHasher = hasherProvider.newHasher();
         }
 
         @Override
-        public void update(byte[] hash) {
-            hashes.add(hash);
+        IonHasher childHasher() {
+            return childHasher;
         }
 
         @Override
-        public Digest digest() {
+        void updateWithDigest(byte[] hash) {
+            hashes.add(escape(hash));
+        }
+
+        @Override
+        void finish() {
+            // these hashes have already been escaped
             Collections.sort(hashes, BYTE_ARRAY_COMPARATOR);
             for(byte[] hash : hashes) {
                 hasher.update(hash);
             }
-            return super.digest();
+            super.finish();
         }
     }
 
     /**
-     * Responsible for hashing all scalar and null values.
+     * Responsible for hashing all scalar and null values.  There is a single ScalarHasher
+     * instance per Hasher;  typical usage is to call withFieldName() and withAnnotations(),
+     * then prepare() (in contrast to ContainerHashers instantiated during stepIn(),
+     * which call prepare() during instantiation).
      */
     class ScalarHasher extends AbstractHasher implements Closeable {
         private final IonWriter scalarWriter;
         private final ByteArrayOutputStream scalarBaos;
-        private final DigestCache digestCache;
 
-        ScalarHasher(DigestCache digestCache) {
-            super(hasherProvider.newHasher(), hasherProvider.newHasher());
-
+        ScalarHasher(IonHasher hasher) {
+            super(hasher, null, null);
             try {
                 this.scalarBaos = new ByteArrayOutputStream();
                 this.scalarWriter = PrivateIonHashTrampoline.newIonWriter(scalarBaos);
             } catch (IOException e) {
                 throw new IonHashException(e);
             }
-
-            this.digestCache = digestCache;
         }
 
         ScalarHasher withFieldName(SymbolToken fieldName) {
@@ -366,110 +342,97 @@ class Hasher implements Closeable {
             return this;
         }
 
-        Digest digestBlob(byte[] value) throws IOException {
-            return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value));
+        ScalarHasher withHasher(IonHasher hasher) {
+            this.hasher = hasher;
+            return this;
         }
 
-        Digest digestBlob(byte[] value, int start, int len) throws IOException {
-            return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value, start, len));
+        @Override
+        void finish() {
+            super.finish();
+            updateDelimiter();
         }
 
-        Digest digestBool(boolean value) throws IOException {
-            return digestScalar(IonType.BOOL,
-                    () -> scalarWriter.writeBool(value),
-                    digestCache.getBool(value),
-                    (digest) -> digestCache.putBool(value, digest));
+        void updateBlob(byte[] value) throws IOException {
+            writeScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value));
         }
 
-        Digest digestClob(byte[] value) throws IOException {
-            return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value));
+        void updateBlob(byte[] value, int start, int len) throws IOException {
+            writeScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value, start, len));
         }
 
-        Digest digestClob(byte[] value, int start, int len) throws IOException {
-            return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value, start, len));
+        void updateBool(boolean value) throws IOException {
+            writeScalar(IonType.BOOL, () -> scalarWriter.writeBool(value));
         }
 
-        Digest digestDecimal(BigDecimal value) throws IOException {
-            return digestScalar(IonType.DECIMAL, () -> scalarWriter.writeDecimal(value));
+        void updateClob(byte[] value) throws IOException {
+            writeScalar(IonType.CLOB, () -> scalarWriter.writeClob(value));
         }
 
-        Digest digestFloat(double value) throws IOException {
+        void updateClob(byte[] value, int start, int len) throws IOException {
+            writeScalar(IonType.CLOB, () -> scalarWriter.writeClob(value, start, len));
+        }
+
+        void updateDecimal(BigDecimal value) throws IOException {
+            writeScalar(IonType.DECIMAL, () -> scalarWriter.writeDecimal(value));
+        }
+
+        void updateFloat(double value) throws IOException {
             if (new Double(value).equals(0.0)) {
                 // value is 0.0, not -0.0
-                hashParts(new byte[][] {new byte[] {0x40}});
-                return digest();
+                writeScalar(IonType.FLOAT, null, FLOAT_POSITIVE_ZERO_PARTS);
             } else {
-                return digestScalar(IonType.FLOAT, () -> scalarWriter.writeFloat(value));
+                writeScalar(IonType.FLOAT, () -> scalarWriter.writeFloat(value));
             }
         }
 
-        Digest digestInt(BigInteger value) throws IOException {
-            return digestScalar(IonType.INT, () -> scalarWriter.writeInt(value));
+        void updateInt(BigInteger value) throws IOException {
+            writeScalar(IonType.INT, () -> scalarWriter.writeInt(value));
         }
 
-        Digest digestNull() throws IOException {
-            return digestNull(IonType.NULL);
+        void updateNull() throws IOException {
+            updateNull(IonType.NULL);
         }
 
-        Digest digestNull(IonType type) throws IOException {
-            return digestScalar(type,
-                    () -> scalarWriter.writeNull(type),
-                    digestCache.getNull(type),
-                    (digest) -> digestCache.putNull(type, digest));
+        void updateNull(IonType type) throws IOException {
+            writeScalar(type, () -> scalarWriter.writeNull(type));
         }
 
-        Digest digestString(String value) throws IOException {
-            return digestScalar(IonType.STRING, () -> scalarWriter.writeString(value));
+        void updateString(String value) throws IOException {
+            writeScalar(IonType.STRING, () -> scalarWriter.writeString(value));
         }
 
-        Digest digestSymbol(String value) throws IOException {
-            return digestSymbolToken(newSymbolToken(value));
+        void updateSymbol(String value) throws IOException {
+            updateSymbolToken(newSymbolToken(value));
         }
 
-        Digest digestSymbolToken(SymbolToken value) throws IOException {
-            byte[] valueDigest = symbolHasher.digest(value);
-            Digest digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
-            updateContainer(digest.fieldNameAnnotatedValue());
-            return digest;
+        void updateSymbolToken(SymbolToken value) throws IOException {
+            writeScalar(IonType.SYMBOL, null, symbolHasher.symbolParts(value));
         }
 
-        Digest digestTimestamp(Timestamp value) throws IOException {
-            return digestScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
-        }
-
-        private Digest digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
-            return digestScalar(ionType, scalarUpdater, null, null);
-        }
-
-        private Digest digestScalar(IonType ionType, Updatable scalarUpdater,
-                byte[] valueDigest, CacheableValue cacheableValue) throws IOException {
-
-            if (cacheableValue != null) {
-                if (valueDigest == null) {
-                    writeScalar(ionType, scalarUpdater);
-                    valueDigest = valueDigest();
-                    cacheableValue.put(valueDigest);
-                }
-                digest = digest(valueDigest);
-            } else {
-                writeScalar(ionType, scalarUpdater);
-                digest = digest();
-            }
-
-            updateContainer(digest.fieldNameAnnotatedValue());
-            return digest;
+        void updateTimestamp(Timestamp value) throws IOException {
+            writeScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
         }
 
         private void writeScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
-            scalarBaos.reset();
-            scalarUpdater.update();
-            scalarWriter.finish();
-            hashParts(scalarOrNullSplitParts(ionType, scalarBaos.toByteArray()));
+            writeScalar(ionType, scalarUpdater, null);
         }
 
-        private void updateContainer(byte[] digest) {
+        private void writeScalar(IonType ionType, Updatable scalarUpdater, byte[][] tqAndRepresentation) throws IOException {
+            updateDelimiter();
+            if (tqAndRepresentation == null) {
+                scalarBaos.reset();
+                scalarUpdater.update();
+                scalarWriter.finish();
+                tqAndRepresentation = scalarOrNullSplitParts(ionType, scalarBaos.toByteArray());
+            }
+            updateTQandRepresentation(tqAndRepresentation);
+            finish();
             if (!containerHasherStack.isEmpty()) {
-                containerHasherStack.peekFirst().update(digest);
+                ContainerHasher containerHasher = containerHasherStack.peekFirst();
+                if (containerHasher instanceof StructHasher) {
+                    containerHasher.updateWithDigest(hasher.digest());
+                }
             }
         }
 
@@ -479,7 +442,7 @@ class Hasher implements Closeable {
             scalarBaos.close();
         }
 
-        // split representation and TQ parts;  also handles any special case binary cleanup
+        // split scalar bytes into TQ and representation;  also handles any special case binary cleanup
         private byte[][] scalarOrNullSplitParts(IonType type, byte[] bytes) throws IOException {
             int tl = bytes[0];
             int offset = 1 + getLengthLength(bytes);
@@ -494,19 +457,45 @@ class Hasher implements Closeable {
 
             // the representation is everything after TL and length
             byte[] representation = Arrays.copyOfRange(bytes, offset, bytes.length);
-            byte tq = (tl & 0x0F) == 0x0F ? (byte)tl : (byte)(tl & 0xF0);
-
+            byte tq;
             if (type == IonType.BOOL) {
                 tq = (byte)tl;
+            } else {
+                tq = (tl & 0x0F) == 0x0F ? (byte)tl : (byte)(tl & 0xF0);
             }
 
             return new byte[][] { new byte[] {tq}, representation };
         }
     }
 
-    // lambda interface that facilitates caching the digest of a value
-    private interface CacheableValue {
-        void put(byte[] digest);
+    // if bytes contains the DELIMITER_BYTE, returns a new array with
+    // each DELIMITER_BYTE preceeded by a DELIMITER_ESCAPE_BYTE;
+    // otherwise, returns the original array unchanged
+    static byte[] escape(byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
+
+        int cnt = 0;
+        for (byte b : bytes) {
+            if (b == DELIMITER_BYTE) {
+                cnt++;
+            }
+        }
+        if (cnt == 0) {
+            // happy case, no escaping required
+            return bytes;
+        }
+
+        byte[] escapedBytes = new byte[bytes.length + cnt];
+        int idx = 0;
+        for (byte b : bytes) {
+            if (b == DELIMITER_BYTE) {
+                escapedBytes[idx++] = DELIMITER_ESCAPE_BYTE;
+            }
+            escapedBytes[idx++] = b;
+        }
+        return escapedBytes;
     }
 
     private static final ByteArrayComparator BYTE_ARRAY_COMPARATOR = new ByteArrayComparator();

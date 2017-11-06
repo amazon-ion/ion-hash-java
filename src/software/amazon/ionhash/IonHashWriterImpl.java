@@ -30,7 +30,6 @@ class IonHashWriterImpl implements IonHashWriter {
     private final IonWriter delegate;
     private final Hasher hasher;
 
-    private byte[] currentHash = EMPTY_BYTE_ARRAY;
     private SymbolToken fieldName = null;
     private List<SymbolToken> annotations = EMPTY_SYMBOLTOKEN_LIST;
 
@@ -47,8 +46,8 @@ class IonHashWriterImpl implements IonHashWriter {
     }
 
     @Override
-    public byte[] currentHash() {
-        return currentHash;
+    public byte[] digest() {
+        return hasher.digest();
     }
 
     @Override
@@ -56,14 +55,13 @@ class IonHashWriterImpl implements IonHashWriter {
         delegate.stepIn(containerType);
         hasher.stepIn(containerType, fieldName, annotations());
 
-        currentHash = EMPTY_BYTE_ARRAY;
         fieldName = null;
         annotations = EMPTY_SYMBOLTOKEN_LIST;
     }
 
     @Override
     public void stepOut() throws IOException {
-        currentHash = hasher.stepOut().annotatedValue();
+        hasher.stepOut();
         delegate.stepOut();
     }
 
@@ -125,43 +123,43 @@ class IonHashWriterImpl implements IonHashWriter {
 
     @Override
     public void writeBlob(byte[] value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestBlob(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateBlob(value));
         delegate.writeBlob(value);
     }
 
     @Override
     public void writeBlob(byte[] value, int start, int len) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestBlob(value, start, len).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateBlob(value, start, len));
         delegate.writeBlob(value, start, len);
     }
 
     @Override
     public void writeBool(boolean value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestBool(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateBool(value));
         delegate.writeBool(value);
     }
 
     @Override
     public void writeClob(byte[] value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestClob(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateClob(value));
         delegate.writeClob(value);
     }
 
     @Override
     public void writeClob(byte[] value, int start, int len) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestClob(value, start, len).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateClob(value, start, len));
         delegate.writeClob(value, start, len);
     }
 
     @Override
     public void writeDecimal(BigDecimal value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestDecimal(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateDecimal(value));
         delegate.writeDecimal(value);
     }
 
     @Override
     public void writeFloat(double value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestFloat(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateFloat(value));
         delegate.writeFloat(value);
     }
 
@@ -172,43 +170,43 @@ class IonHashWriterImpl implements IonHashWriter {
 
     @Override
     public void writeInt(BigInteger value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestInt(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateInt(value));
         delegate.writeInt(value);
     }
 
     @Override
     public void writeNull() throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestNull().annotatedValue());
+        updateScalar(() -> hasher.scalar().updateNull());
         delegate.writeNull();
     }
 
     @Override
     public void writeNull(IonType type) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestNull(type).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateNull(type));
         delegate.writeNull(type);
     }
 
     @Override
     public void writeString(String value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestString(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateString(value));
         delegate.writeString(value);
     }
 
     @Override
     public void writeSymbol(String content) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestSymbol(content).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateSymbol(content));
         delegate.writeSymbol(content);
     }
 
     @Override
     public void writeSymbolToken(SymbolToken content) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestSymbolToken(content).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateSymbolToken(content));
         delegate.writeSymbolToken(content);
     }
 
     @Override
     public void writeTimestamp(Timestamp value) throws IOException {
-        updateScalar(() -> currentHash = hasher.scalar().digestTimestamp(value).annotatedValue());
+        updateScalar(() -> hasher.scalar().updateTimestamp(value));
         delegate.writeTimestamp(value);
     }
 
