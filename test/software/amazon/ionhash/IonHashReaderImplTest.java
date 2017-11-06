@@ -77,13 +77,13 @@ public class IonHashReaderImplTest {
         assertArrayEquals(new byte[] {}, ihr.currentHash());
 
         assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {0x70, 0x61, 0x20, 0x03}, ihr.currentHash());
+        assertArrayEquals(new byte[] {0x20, 0x03}, ihr.currentHash());
 
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {0x70, 0x62, 0x20, 0x04}, ihr.currentHash());
+        assertArrayEquals(new byte[] {0x20, 0x04}, ihr.currentHash());
 
         assertEquals(null, ihr.next());   // redundant next(), no change
-        assertArrayEquals(new byte[] {0x70, 0x62, 0x20, 0x04}, ihr.currentHash());
+        assertArrayEquals(new byte[] {0x20, 0x04}, ihr.currentHash());
 
         ihr.stepOut();
         assertArrayEquals(new byte[] {(byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04}, ihr.currentHash());

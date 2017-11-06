@@ -24,6 +24,9 @@ import java.util.List;
  * Provides core hash functionality for use by streaming hash readers and writers.
  * It relies on the binary encoding implementation in IonRawBinaryWriter when possible.
  * <p/>
+ * Callers should assume that Digest objects returned by this API will be reused, and
+ * may be changed during the next call to this API.
+ * <p/>
  * This class is not thread-safe.
  */
 class Hasher implements Closeable {
@@ -65,18 +68,18 @@ class Hasher implements Closeable {
         containerHasherStack.addFirst(hasher);
     }
 
-    byte[] stepOut() {
+    Digest stepOut() {
         if (containerHasherStack.isEmpty()) {
             throw new IllegalStateException("Cannot stepOut any further, already at top level.");
         }
 
-        byte[] currentHash = containerHasherStack.pop().digest();
+        Digest digest = containerHasherStack.pop().digest();
 
         if (!containerHasherStack.isEmpty()) {
-            containerHasherStack.peekFirst().update(currentHash);
+            containerHasherStack.peekFirst().update(digest.fieldNameAnnotatedValue());
         }
 
-        return currentHash;
+        return digest;
     }
 
     @Override
@@ -157,11 +160,44 @@ class Hasher implements Closeable {
     }
 
     /**
+     * Lightweight, reusable value class that represent various hashes of a value.  For field 'a' in
+     * the following struct:
+     * <pre>
+     *   {
+     *     a:annot::5
+     *   }
+     * </pre>
+     * <ul>
+     *   <li>value represents the hash of:  5
+     *   <li>annotatedValue represents the hash of:  annot::5
+     *   <li>fieldNameAnnotatedValue represents the hash of:  a:annot::5
+     * </ul>
+     */
+    static class Digest {
+        private byte[] value;
+        private byte[] annotatedValue;
+        private byte[] fieldNameAnnotatedValue;
+
+        byte[] value() {
+            return value;
+        }
+
+        byte[] annotatedValue() {
+            return annotatedValue;
+        }
+
+        byte[] fieldNameAnnotatedValue() {
+            return fieldNameAnnotatedValue;
+        }
+    }
+
+    /**
      * Centralizes fieldname and annotation handling for scalar and container values.
      */
-    private abstract class AbstractHasher implements IonHasher {
+    private abstract class AbstractHasher {
         SymbolToken fieldName;
         SymbolToken[] annotations;
+        Digest digest = new Digest();
 
         final IonHasher hasher = hasherProvider.newHasher();
         private IonHasher fieldHasher;
@@ -198,7 +234,6 @@ class Hasher implements Closeable {
             }
         }
 
-        @Override
         public void update(byte[] bytes) {
             hasher.update(bytes);
         }
@@ -207,25 +242,29 @@ class Hasher implements Closeable {
             return hasher.digest();
         }
 
-        @Override
-        public byte[] digest() {
+        Digest digest() {
             return digest(null);
         }
 
-        byte[] digest(byte[] valueDigest) {
-            byte[] digest = valueDigest;
-            if (digest == null) {
-                digest = hasher.digest();
+        Digest digest(byte[] valueDigest) {
+            if (valueDigest != null) {
+                digest.value = valueDigest;
+            } else {
+                digest.value = hasher.digest();
             }
 
             if (annotations != null && annotations.length > 0) {
-                annotationHasher.update(digest);
-                digest = annotationHasher.digest();
+                annotationHasher.update(digest.value);
+                digest.annotatedValue = annotationHasher.digest();
+            } else {
+                digest.annotatedValue = digest.value;
             }
 
             if (fieldName != null) {
-                fieldHasher.update(digest);
-                digest = fieldHasher.digest();
+                fieldHasher.update(digest.annotatedValue);
+                digest.fieldNameAnnotatedValue = fieldHasher.digest();
+            } else {
+                digest.fieldNameAnnotatedValue = digest.annotatedValue;
             }
 
             return digest;
@@ -287,7 +326,7 @@ class Hasher implements Closeable {
         }
 
         @Override
-        public byte[] digest() {
+        public Digest digest() {
             Collections.sort(hashes, BYTE_ARRAY_COMPARATOR);
             for(byte[] hash : hashes) {
                 hasher.update(hash);
@@ -327,34 +366,34 @@ class Hasher implements Closeable {
             return this;
         }
 
-        byte[] digestBlob(byte[] value) throws IOException {
+        Digest digestBlob(byte[] value) throws IOException {
             return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value));
         }
 
-        byte[] digestBlob(byte[] value, int start, int len) throws IOException {
+        Digest digestBlob(byte[] value, int start, int len) throws IOException {
             return digestScalar(IonType.BLOB, () -> scalarWriter.writeBlob(value, start, len));
         }
 
-        byte[] digestBool(boolean value) throws IOException {
+        Digest digestBool(boolean value) throws IOException {
             return digestScalar(IonType.BOOL,
                     () -> scalarWriter.writeBool(value),
                     digestCache.getBool(value),
                     (digest) -> digestCache.putBool(value, digest));
         }
 
-        byte[] digestClob(byte[] value) throws IOException {
+        Digest digestClob(byte[] value) throws IOException {
             return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value));
         }
 
-        byte[] digestClob(byte[] value, int start, int len) throws IOException {
+        Digest digestClob(byte[] value, int start, int len) throws IOException {
             return digestScalar(IonType.CLOB, () -> scalarWriter.writeClob(value, start, len));
         }
 
-        byte[] digestDecimal(BigDecimal value) throws IOException {
+        Digest digestDecimal(BigDecimal value) throws IOException {
             return digestScalar(IonType.DECIMAL, () -> scalarWriter.writeDecimal(value));
         }
 
-        byte[] digestFloat(double value) throws IOException {
+        Digest digestFloat(double value) throws IOException {
             if (new Double(value).equals(0.0)) {
                 // value is 0.0, not -0.0
                 hashParts(new byte[][] {new byte[] {0x40}});
@@ -364,61 +403,61 @@ class Hasher implements Closeable {
             }
         }
 
-        byte[] digestInt(BigInteger value) throws IOException {
+        Digest digestInt(BigInteger value) throws IOException {
             return digestScalar(IonType.INT, () -> scalarWriter.writeInt(value));
         }
 
-        byte[] digestNull() throws IOException {
+        Digest digestNull() throws IOException {
             return digestNull(IonType.NULL);
         }
 
-        byte[] digestNull(IonType type) throws IOException {
+        Digest digestNull(IonType type) throws IOException {
             return digestScalar(type,
                     () -> scalarWriter.writeNull(type),
                     digestCache.getNull(type),
                     (digest) -> digestCache.putNull(type, digest));
         }
 
-        byte[] digestString(String value) throws IOException {
+        Digest digestString(String value) throws IOException {
             return digestScalar(IonType.STRING, () -> scalarWriter.writeString(value));
         }
 
-        byte[] digestSymbol(String value) throws IOException {
+        Digest digestSymbol(String value) throws IOException {
             return digestSymbolToken(newSymbolToken(value));
         }
 
-        byte[] digestSymbolToken(SymbolToken value) throws IOException {
+        Digest digestSymbolToken(SymbolToken value) throws IOException {
             byte[] valueDigest = symbolHasher.digest(value);
-            byte[] digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
-            updateContainer(digest);
+            Digest digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
+            updateContainer(digest.fieldNameAnnotatedValue());
             return digest;
         }
 
-        byte[] digestTimestamp(Timestamp value) throws IOException {
+        Digest digestTimestamp(Timestamp value) throws IOException {
             return digestScalar(IonType.TIMESTAMP, () -> scalarWriter.writeTimestamp(value));
         }
 
-        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
-            return digestScalar(ionType, scalarUpdater, null, null);
+        private Digest digestScalar(IonType ionType, Updatable scalarUpdater) throws IOException {
+            return digestScalar(ionType, scalarUpdater, null);
         }
 
-        private byte[] digestScalar(IonType ionType, Updatable scalarUpdater,
-                byte[] valueDigest, CacheableValue cacheableValue) throws IOException {
-
-            byte[] digest;
+        private Digest digestScalar(IonType ionType, Updatable scalarUpdater, CacheableValue cacheableValue) throws IOException {
             if (cacheableValue != null) {
+                String key = digestCache.getKey(ionType, cacheableValue.valueToString());
+                byte[] valueDigest = digestCache.get(key);
                 if (valueDigest == null) {
                     writeScalar(ionType, scalarUpdater);
-                    valueDigest = valueDigest();
-                    cacheableValue.put(valueDigest);
+                    digest = digest();
+                    digestCache.put(key, digest.value());
+                } else {
+                    digest = digest(valueDigest);
                 }
-                digest = digest(valueDigest);   // this is a no-op unless there's a fieldName or annotation(s)
             } else {
                 writeScalar(ionType, scalarUpdater);
                 digest = digest();
             }
 
-            updateContainer(digest);
+            updateContainer(digest.fieldNameAnnotatedValue());
             return digest;
         }
 
