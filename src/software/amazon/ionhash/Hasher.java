@@ -30,6 +30,11 @@ import java.util.List;
  * This class is not thread-safe.
  */
 class Hasher implements Closeable {
+    private static final byte[] TQ_SYMBOL      = new byte[] {      0x70};
+    private static final byte[] TQ_SYMBOL_SID0 = new byte[] {      0x71};
+    private static final byte[] TQ_LIST        = new byte[] {(byte)0xB0};
+    private static final byte[] TQ_SEXP        = new byte[] {(byte)0xC0};
+    private static final byte[] TQ_STRUCT      = new byte[] {(byte)0xD0};
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     private final IonHasherProvider hasherProvider;
@@ -88,8 +93,6 @@ class Hasher implements Closeable {
      * Centralizes logic for hashing symbols caching their digests;  this includes
      * annotations, field names, and values that are symbols.
      */
-    private static final byte[] SYMBOL_TQ      = new byte[] {0x70};
-    private static final byte[] SYMBOL_TQ_SID0 = new byte[] {0x71};
     class SymbolHasher implements Closeable {
         private final IonHasher hasher;
         private final ByteArrayOutputStream baos;
@@ -119,9 +122,9 @@ class Hasher implements Closeable {
 
             byte[] symbolBytes;
             try {
-                byte[] tq = SYMBOL_TQ;
+                byte[] tq = TQ_SYMBOL;
                 if (text == null && symbol.getSid() == 0) {
-                    tq  = SYMBOL_TQ_SID0;
+                    tq  = TQ_SYMBOL_SID0;
                 }
                 baos.reset();
                 writer.writeString(text);
@@ -138,14 +141,13 @@ class Hasher implements Closeable {
         }
 
         private byte[] digest(SymbolToken symbol) {
-            String key = digestCache.getKey(IonType.SYMBOL, symbol);
-            byte[] digest = digestCache.get(key);
+            byte[] digest = digestCache.getSymbol(symbol);
             if (digest == null) {
                 byte[][] parts = symbolParts(symbol);
                 hasher.update(parts[0]);
                 hasher.update(parts[1]);
                 digest = hasher.digest();
-                digestCache.put(key, digest);
+                digestCache.putSymbol(symbol, digest);
             }
 
             return digest;
@@ -292,21 +294,19 @@ class Hasher implements Closeable {
         @Override
         void prepare() {
             super.prepare();
-            byte tq;
             switch (ionType) {
                 case LIST:
-                    tq = (byte)0xB0;
+                    hasher.update(TQ_LIST);
                     break;
                 case SEXP:
-                    tq = (byte)0xC0;
+                    hasher.update(TQ_SEXP);
                     break;
                 case STRUCT:
-                    tq = (byte)0xD0;
+                    hasher.update(TQ_STRUCT);
                     break;
                 default:
                     throw new IonHashException("Unexpected container type " + ionType);
             }
-            hasher.update(new byte[] {tq});
         }
     }
 
@@ -377,7 +377,8 @@ class Hasher implements Closeable {
         Digest digestBool(boolean value) throws IOException {
             return digestScalar(IonType.BOOL,
                     () -> scalarWriter.writeBool(value),
-                    () -> value+"");
+                    digestCache.getBool(value),
+                    (digest) -> digestCache.putBool(value, digest));
         }
 
         Digest digestClob(byte[] value) throws IOException {
@@ -413,7 +414,8 @@ class Hasher implements Closeable {
         Digest digestNull(IonType type) throws IOException {
             return digestScalar(type,
                     () -> scalarWriter.writeNull(type),
-                    () -> null);
+                    digestCache.getNull(type),
+                    (digest) -> digestCache.putNull(type, digest));
         }
 
         Digest digestString(String value) throws IOException {
@@ -503,9 +505,9 @@ class Hasher implements Closeable {
         }
     }
 
-    // lambda interface that facilitates mapping a value to a String representation for digest caching
+    // lambda interface that facilitates caching the digest of a value
     private interface CacheableValue {
-        String valueToString();
+        void put(byte[] digest);
     }
 
     private static final ByteArrayComparator BYTE_ARRAY_COMPARATOR = new ByteArrayComparator();
