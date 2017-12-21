@@ -12,8 +12,9 @@ import software.amazon.ion.IonReader;
  */
 public interface IonHashReader extends IonReader {
     /**
-     * Provides the hash of the IonValue just nexted past or stepped out of.
-     * If there is no current hash value, returns an empty array.
+     * Provides the hash of the IonValue just nexted past or stepped out of;
+     * hashes of partial Ion values are not provided.  If there is no current
+     * hash value, returns an empty array.
      * <p/>
      * Implementations must calculate the hash independently of how the Ion
      * is traversed (e.g., the hash of a container must be identical whether

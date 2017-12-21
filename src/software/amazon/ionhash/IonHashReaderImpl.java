@@ -14,11 +14,9 @@ import java.math.BigInteger;
 import java.util.Date;
 import java.util.Iterator;
 
-import static software.amazon.ionhash.Hasher.EMPTY_BYTE_ARRAY;
-
 /**
- * This IonReader decorator calculates a currentHash of the Ion data model.
- * The currentHash of the IonValue just nexted past or stepped out of is available via currentHash().
+ * This IonReader decorator calculates a hash over the Ion data model.
+ * The hash of the IonValue just nexted past or stepped out of is available via digest().
  * <p/>
  * This class is not thread-safe.
  */
@@ -37,7 +35,7 @@ class IonHashReaderImpl implements IonHashReader {
         }
 
         this.delegate = delegate;
-        this.hasher = new Hasher(hasherProvider);
+        this.hasher = new HasherEngagerImpl(new HasherImpl(hasherProvider));
     }
 
     @Override

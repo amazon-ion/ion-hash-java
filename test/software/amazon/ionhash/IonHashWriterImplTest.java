@@ -34,48 +34,44 @@ public class IonHashWriterImplTest {
         assertArrayEquals(new byte[] {}, ihw.digest());
 
         ihw.writeNull();
-        assertArrayEquals(new byte[] {0x0F}, ihw.digest());
+        assertArrayEquals(TestUtil.sexpToBytes("(0xef 0x0f 0xef)"), ihw.digest());
 
         ihw.stepIn(IonType.LIST);
-        assertArrayEquals(new byte[] {}, ihw.digest());
-
-        ihw.writeInt(5);
-        assertArrayEquals(new byte[] {0x20, 0x05}, ihw.digest());
-
+          assertArrayEquals(new byte[] {}, ihw.digest());
+          ihw.writeInt(5);
+          assertArrayEquals(new byte[] {}, ihw.digest());
         ihw.stepOut();
-        assertArrayEquals(new byte[] {(byte)0xB0, 0x20, 0x05}, ihw.digest());
+        assertArrayEquals(TestUtil.sexpToBytes("(0xef 0xB0 0xef 0x20 0x05 0xef 0xef)"), ihw.digest());
 
         ihw.writeNull();
-        assertArrayEquals(new byte[] {0x0F}, ihw.digest());
+        assertArrayEquals(TestUtil.sexpToBytes("(0xef 0x0f 0xef)"), ihw.digest());
 
         assertFalse(ihw.isInStruct());
 
         ihw.stepIn(IonType.STRUCT);
         assertTrue(ihw.isInStruct());
-        assertArrayEquals(new byte[] {}, ihw.digest());
 
         ihw.setFieldName("hello");
         ihw.addTypeAnnotation("ion");
         ihw.addTypeAnnotation("hash");
         ihw.writeSymbol("world");
-        assertArrayEquals(new byte[] {
-                (byte)0xE0, 0x70, 0x69, 0x6F, 0x6E,         // ion::
-                            0x70, 0x68, 0x61, 0x73, 0x68,   // hash::
-                      0x70, 0x77, 0x6F, 0x72, 0x6C, 0x64},  // world
-                ihw.digest());
 
         ihw.stepOut();
         assertFalse(ihw.isInStruct());
-        assertArrayEquals(new byte[] {
-                (byte)0xD0,                                     // {
-                    (byte)0x70, 0x68, 0x65, 0x6C, 0x6C, 0x6F,   //   hello:
-                    (byte)0xE0, 0x70, 0x69, 0x6F, 0x6E,         //   ion::
-                                0x70, 0x68, 0x61, 0x73, 0x68,   //   hash::
-                          0x70, 0x77, 0x6F, 0x72, 0x6C, 0x64},  //   world
+        assertArrayEquals(TestUtil.sexpToBytes(
+                  "(0xef 0xd0"
+                + "   0xef 0xef"
+                + "     0xef 0xef 0x70 0x68 0x65 0x6c 0x6c 0x6f 0xef 0xef"     // hello:
+                + "     0xef 0xef 0xe0"
+                + "       0xef 0xef 0x70 0x69 0x6f 0x6e 0xef 0xef"             // ion::
+                + "       0xef 0xef 0x70 0x68 0x61 0x73 0x68 0xef 0xef"        // hash::
+                + "       0xef 0xef 0x70 0x77 0x6f 0x72 0x6c 0x64 0xef 0xef"   // world
+                + "     0xef 0xef"
+                + "   0xef 0xef"
+                + " 0xef)"),
                 ihw.digest());
 
         ihw.finish();
-
         assertEquals("null [5] null {hello:ion::hash::world}",
                 new String(baos.toByteArray()));
     }

@@ -15,11 +15,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static software.amazon.ionhash.Hasher.EMPTY_BYTE_ARRAY;
-
 /**
- * This IonWriter decorator calculates a currentHash of the Ion data model.
- * The currentHash of the IonValue just written or stepped out of is available via currentHash().
+ * This IonWriter decorator calculates a hash over the Ion data model.
+ * The hash of the IonValue just written or stepped out of is available via digest().
  * <p/>
  * This class is not thread-safe.
  */
@@ -42,7 +40,7 @@ class IonHashWriterImpl implements IonHashWriter {
         }
 
         this.delegate = delegate;
-        this.hasher = new Hasher(hasherProvider);
+        this.hasher = new HasherEngagerImpl(new HasherImpl(hasherProvider));
     }
 
     @Override
