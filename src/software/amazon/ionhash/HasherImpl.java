@@ -205,8 +205,6 @@ class HasherImpl implements Hasher {
         public final void prepare() {
             if (!containerHasherStack.isEmpty() && fieldName != null) {
                 beginMarker();
-
-                beginMarker();
                 updateTQandRepresentation(symbolHasher.symbolParts(fieldName));
                 endMarker();
             }
@@ -249,10 +247,6 @@ class HasherImpl implements Hasher {
         // impl assumes this method is called AFTER this object is removed from the containerHasherStack (if present)
         void finish() {
             if (annotations != null && annotations.length > 0) {
-                endMarker();
-            }
-
-            if (!containerHasherStack.isEmpty() && fieldName != null) {
                 endMarker();
             }
         }
@@ -314,15 +308,14 @@ class HasherImpl implements Hasher {
         }
 
         void updateWithDigest(byte[] hash) {
-            hashes.add(escape(hash));
+            hashes.add(hash);
         }
 
         @Override
         void finish() {
-            // these hashes have already been escaped
             Collections.sort(hashes, BYTE_ARRAY_COMPARATOR);
             for(byte[] hash : hashes) {
-                hasher.update(hash);
+                hasher.update(escape(hash));
             }
             super.finish();
         }
