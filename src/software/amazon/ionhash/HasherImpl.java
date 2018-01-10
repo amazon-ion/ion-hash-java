@@ -30,9 +30,11 @@ import java.util.List;
  * This class is not thread-safe.
  */
 class HasherImpl implements Hasher {
-    private static final byte DELIMITER_BYTE         = (byte)0xEF;
-    private static final byte DELIMITER_ESCAPE_BYTE  = DELIMITER_BYTE;
-    private static final byte[] VALUE_DELIMITER      = new byte[] {DELIMITER_BYTE};
+    private static final byte BEGIN_MARKER_BYTE      = 0x0B;
+    private static final byte END_MARKER_BYTE        = 0x0E;
+    private static final byte ESCAPE_BYTE            = 0x0C;
+    private static final byte[] BEGIN_MARKER         = new byte[] { BEGIN_MARKER_BYTE };
+    private static final byte[] END_MARKER           = new byte[] { END_MARKER_BYTE };
 
     private static final byte[] TQ_SYMBOL            = new byte[] {      0x70};
     private static final byte[] TQ_SYMBOL_SID0       = new byte[] {      0x71};
@@ -202,20 +204,20 @@ class HasherImpl implements Hasher {
 
         public final void prepare() {
             if (!containerHasherStack.isEmpty() && fieldName != null) {
-                updateDelimiter();
+                beginMarker();
 
-                updateDelimiter();
+                beginMarker();
                 updateTQandRepresentation(symbolHasher.symbolParts(fieldName));
-                updateDelimiter();
+                endMarker();
             }
 
             if (annotations != null && annotations.length > 0) {
-                updateDelimiter();
+                beginMarker();
                 hasher.update(TQ_ANNOTATED_VALUE);
                 for (SymbolToken annotation : annotations) {
-                    updateDelimiter();
+                    beginMarker();
                     updateTQandRepresentation(symbolHasher.symbolParts(annotation));
-                    updateDelimiter();
+                    endMarker();
                 }
             }
         }
@@ -224,8 +226,12 @@ class HasherImpl implements Hasher {
             return hasher;
         }
 
-        final void updateDelimiter() {
-            hasher.update(VALUE_DELIMITER);
+        final void beginMarker() {
+            hasher.update(BEGIN_MARKER);
+        }
+
+        final void endMarker() {
+            hasher.update(END_MARKER);
         }
 
         final void updateTQandRepresentation(byte[][] tqAndRepresentation) {
@@ -243,11 +249,11 @@ class HasherImpl implements Hasher {
         // impl assumes this method is called AFTER this object is removed from the containerHasherStack (if present)
         void finish() {
             if (annotations != null && annotations.length > 0) {
-                updateDelimiter();
+                endMarker();
             }
 
             if (!containerHasherStack.isEmpty() && fieldName != null) {
-                updateDelimiter();
+                endMarker();
             }
         }
     }
@@ -263,7 +269,7 @@ class HasherImpl implements Hasher {
             assert IonType.isContainer(ionType);
             this.ionType = ionType;
 
-            updateDelimiter();
+            beginMarker();
             switch (ionType) {
                 case LIST:
                     hasher.update(TQ_LIST);
@@ -286,7 +292,7 @@ class HasherImpl implements Hasher {
         @Override
         void finish() {
             super.finish();
-            updateDelimiter();
+            endMarker();
         }
     }
 
@@ -360,7 +366,7 @@ class HasherImpl implements Hasher {
         @Override
         void finish() {
             super.finish();
-            updateDelimiter();
+            endMarker();
         }
 
         public void updateBlob(byte[] value) throws IOException {
@@ -429,7 +435,7 @@ class HasherImpl implements Hasher {
         }
 
         private void writeScalar(IonType ionType, Updatable scalarUpdater, byte[][] tqAndRepresentation) throws IOException {
-            updateDelimiter();
+            beginMarker();
             if (tqAndRepresentation == null) {
                 scalarBaos.reset();
                 scalarUpdater.update();
@@ -478,8 +484,8 @@ class HasherImpl implements Hasher {
         }
     }
 
-    // if bytes contains the DELIMITER_BYTE, returns a new array with
-    // each DELIMITER_BYTE preceeded by a DELIMITER_ESCAPE_BYTE;
+    // if bytes contains one or more BEGIN_MARKER_BYTEs, END_MARKER_BYTEs, or ESCAPE_BYTEs,
+    // returns a new array with such bytes preceeded by a ESCAPE_BYTE;
     // otherwise, returns the original array unchanged
     static byte[] escape(byte[] bytes) {
         if (bytes == null) {
@@ -488,7 +494,7 @@ class HasherImpl implements Hasher {
 
         int cnt = 0;
         for (byte b : bytes) {
-            if (b == DELIMITER_BYTE) {
+            if (b == BEGIN_MARKER_BYTE || b == END_MARKER_BYTE || b == ESCAPE_BYTE) {
                 cnt++;
             }
         }
@@ -500,8 +506,8 @@ class HasherImpl implements Hasher {
         byte[] escapedBytes = new byte[bytes.length + cnt];
         int idx = 0;
         for (byte b : bytes) {
-            if (b == DELIMITER_BYTE) {
-                escapedBytes[idx++] = DELIMITER_ESCAPE_BYTE;
+            if (b == BEGIN_MARKER_BYTE || b == END_MARKER_BYTE || b == ESCAPE_BYTE) {
+                escapedBytes[idx++] = ESCAPE_BYTE;
             }
             escapedBytes[idx++] = b;
         }

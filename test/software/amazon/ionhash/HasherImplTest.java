@@ -16,18 +16,22 @@ public class HasherImplTest {
         byte[] empty = new byte[] {};
         assertEquals(empty, HasherImpl.escape(empty));
 
-        byte[] bytes = new byte[] {0x00, 0x01, 0x02, 0x03};
+        byte[] bytes = new byte[] {0x10, 0x11, 0x12, 0x13};
         assertEquals(bytes, HasherImpl.escape(bytes));
 
 
         // escape cases
-        assertArrayEquals(new byte[] {(byte)0xEF, (byte)0xEF},
-            HasherImpl.escape(new byte[] {(byte)0xEF}));
+        assertArrayEquals(new byte[] {0x0C, 0x0B}, HasherImpl.escape(new byte[] {0x0B}));
+        assertArrayEquals(new byte[] {0x0C, 0x0E}, HasherImpl.escape(new byte[] {0x0E}));
+        assertArrayEquals(new byte[] {0x0C, 0x0C}, HasherImpl.escape(new byte[] {0x0C}));
 
-        assertArrayEquals(new byte[] {(byte)0xEF, (byte)0xEF, (byte)0xEF, (byte)0xEF},
-            HasherImpl.escape(new byte[] {(byte)0xEF, (byte)0xEF}));
+        assertArrayEquals(    new byte[] {0x0C, 0x0B, 0x0C, 0x0E, 0x0C, 0x0C},
+            HasherImpl.escape(new byte[] {      0x0B,       0x0E,       0x0C}));
 
-        assertArrayEquals(new byte[] {(byte)0xEF, (byte)0xEF, 0x00, (byte)0xEF, (byte)0xEF, 0x01, (byte)0xEF, (byte)0xEF, 0x02, (byte)0xEF, (byte)0xEF},
-                HasherImpl.escape(new byte[] {(byte)0xEF, 0x00, (byte)0xEF, 0x01, (byte)0xEF, 0x02, (byte)0xEF}));
+        assertArrayEquals(    new byte[] {0x0C, 0x0C, 0x0C, 0x0C},
+            HasherImpl.escape(new byte[] {      0x0C,       0x0C}));
+
+        assertArrayEquals(    new byte[] {0x0C, 0x0C, 0x10, 0x0C, 0x0C, 0x11, 0x0C, 0x0C, 0x12, 0x0C, 0x0C},
+            HasherImpl.escape(new byte[] {      0x0C, 0x10,       0x0C, 0x11,       0x0C, 0x12,       0x0C}));
     }
 }
