@@ -285,8 +285,8 @@ class HasherImpl implements Hasher {
 
         @Override
         void finish() {
-            super.finish();
             endMarker();
+            super.finish();
         }
     }
 
@@ -358,8 +358,8 @@ class HasherImpl implements Hasher {
 
         @Override
         void finish() {
-            super.finish();
             endMarker();
+            super.finish();
         }
 
         public void updateBlob(byte[] value) throws IOException {

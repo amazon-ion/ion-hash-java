@@ -296,7 +296,7 @@ timestampDistinct03::{
 // /timestamps
 
 // symbols
-// SID0 test
+// TBD:  SID0 test
 //{ ion:'',            expect:{ identity:(update::(0x0b) update::(0x70) update::(0x0e)
 //                                        digest::(0x0b 0x70 0x0e)) } }
 { ion:' ',           expect:{ identity:(update::(0x0b)
