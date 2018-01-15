@@ -22,9 +22,9 @@ public class IonHashReaderImplTest {
                 ION.newReader(""), TestIonHasherProviders.getInstance("identity"));
 
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.digest());
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.digest());
     }
 
     @Test
@@ -33,155 +33,102 @@ public class IonHashReaderImplTest {
                 ION.newReader("1 2 3"), TestIonHasherProviders.getInstance("identity"));
 
         assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.digest());
 
         assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x01}, ihr.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0x20 0x01 0x0e)"), ihr.digest());
 
         assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x02}, ihr.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0x20 0x02 0x0e)"), ihr.digest());
 
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x03}, ihr.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0x20 0x03 0x0e)"), ihr.digest());
 
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x03}, ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.digest());
     }
 
-    @Test
-    public void testHashRepresentsPreviousValue() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        assertEquals(IonType.LIST, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        ihr.stepIn();
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x01}, ihr.currentHash());
-
-        assertEquals(IonType.STRUCT, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x02}, ihr.currentHash());
-
-        ihr.stepIn();
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {}, ihr.currentHash());
-
-        assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x03}, ihr.currentHash());
-
+    private void consume(TestHelper consumer) {
+        IonHashReader ihr = new IonHashReaderImpl(ION.newReader("[1,2,{a:3,b:4},5]"),
+                TestIonHasherProviders.getInstance("identity"));
+        assertArrayEquals(new byte[] {}, ihr.digest());
+        consumer.traverse(ihr);
+        assertArrayEquals(TestUtil.sexpToBytes(
+                  "(0x0b 0xb0"
+                + "   0x0b 0x20 0x01 0x0e"
+                + "   0x0b 0x20 0x02 0x0e"
+                + "   0x0b 0xd0"
+                + "     0x0c 0x0b 0x70 0x61 0x0c 0x0e 0x0c 0x0b 0x20 0x03 0x0c 0x0e"
+                + "     0x0c 0x0b 0x70 0x62 0x0c 0x0e 0x0c 0x0b 0x20 0x04 0x0c 0x0e"
+                + "   0x0e"
+                + "   0x0b 0x20 0x05 0x0e"
+                + " 0x0e)"),
+                ihr.digest());
         assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x04}, ihr.currentHash());
-
-        assertEquals(null, ihr.next());   // redundant next(), no change
-        assertArrayEquals(new byte[] {0x20, 0x04}, ihr.currentHash());
-
-        ihr.stepOut();
-        assertArrayEquals(new byte[] {(byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04}, ihr.currentHash());
-
-        assertEquals(IonType.INT, ihr.next());
-        assertArrayEquals(new byte[] {(byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04}, ihr.currentHash());
-
-        assertEquals(null, ihr.next());
-        assertArrayEquals(new byte[] {0x20, 0x05}, ihr.currentHash());
-
-        assertEquals(null, ihr.next());   // redundant next(), no change
-        assertArrayEquals(new byte[] {0x20, 0x05}, ihr.currentHash());
-
-        ihr.stepOut();
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
-
-        assertEquals(null, ihr.next());
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
-
-        assertEquals(null, ihr.next());   // redundant next(), no change
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
-    }
-
-    @Test
-    public void testConsumeRemainder_singleNext() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-        assertEquals(IonType.LIST, ihr.next());
-        assertEquals(null, ihr.next());
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
+        assertArrayEquals(new byte[] {}, ihr.digest());
     }
 
     @Test
     public void testConsumeRemainder_partialConsume() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-        ihr.next();
-        ihr.stepIn();
-        ihr.next();
-        ihr.next();
-        ihr.next();
-        ihr.stepIn();
-        ihr.next();
-        ihr.stepOut();   // we've only partially consumed the struct
-        ihr.stepOut();   // we've only partially consumed the list
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
+        consume((ihr) -> {
+            ihr.next();
+            ihr.stepIn();
+              ihr.next();
+              ihr.next();
+              ihr.next();
+              ihr.stepIn();
+                ihr.next();
+              ihr.stepOut();  // we've only partially consumed the struct
+            ihr.stepOut();    // we've only partially consumed the list
+        });
     }
 
     @Test
     public void testConsumeRemainder_stepInStepOutNested() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-        ihr.next();
-        ihr.stepIn();
-        ihr.next();
-        ihr.next();
-        ihr.next();
-        ihr.stepIn();
-        ihr.stepOut();   // we haven't consumed ANY of the struct
-        ihr.stepOut();   // we've only partially consumed the list
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
+        consume((ihr) -> {
+            ihr.next();
+            ihr.stepIn();
+              ihr.next();
+              ihr.next();
+              ihr.next();
+              ihr.stepIn();
+              ihr.stepOut();  // we haven't consumed ANY of the struct
+            ihr.stepOut();    // we've only partially consumed the list
+        });
     }
 
     @Test
     public void testConsumeRemainder_stepInNextStepOut() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-        ihr.next();
-        ihr.stepIn();
-        ihr.next();
-        ihr.stepOut();   // we've partially consumed the list
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
+        consume((ihr) -> {
+            ihr.next();
+            ihr.stepIn();
+              ihr.next();
+            ihr.stepOut();   // we've partially consumed the list
+        });
     }
 
     @Test
     public void testConsumeRemainder_stepInStepOutTopLevel() {
-        IonHashReader ihr = new IonHashReaderImpl(
-                ION.newReader("[1,2,{a:3,b:4},5]"), TestIonHasherProviders.getInstance("identity"));
-        ihr.next();
-        ihr.stepIn();
-        ihr.stepOut();   // we haven't consumed ANY of the list
-        assertArrayEquals(
-            new byte[] {(byte)0xb0, 0x20, 0x01, 0x20, 0x02, (byte)0xd0, 0x70, 0x61, 0x20, 0x03, 0x70, 0x62, 0x20, 0x04, 0x20, 0x05},
-            ihr.currentHash());
+        consume((ihr) -> {
+            ihr.next();
+            assertArrayEquals(new byte[] {}, ihr.digest());
+
+            ihr.stepIn();
+              assertArrayEquals(new byte[] {}, ihr.digest());
+            ihr.stepOut();   // we haven't consumed ANY of the list
+        });
+    }
+
+    @Test
+    public void testConsumeRemainder_singleNext() {
+        consume((ihr) -> {
+            ihr.next();
+            ihr.next();
+        });
+    }
+
+    interface TestHelper {
+        void traverse(IonHashReader ihr);
     }
 
     /*

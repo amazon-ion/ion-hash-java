@@ -4,8 +4,6 @@ import software.amazon.ion.IonReader;
 import software.amazon.ion.IonSystem;
 import software.amazon.ion.IonType;
 import software.amazon.ion.IonWriter;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.Timestamp;
 import software.amazon.ion.system.IonBinaryWriterBuilder;
 import software.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
@@ -15,7 +13,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.math.BigDecimal;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertArrayEquals;
@@ -27,58 +24,52 @@ public class IonHashWriterImplTest {
 
     @Test
     public void testMiscMethods() throws IOException {
-        // coverage for currentHash(), isInStruct(), setFieldName(), addTypeAnnotation()
+        // coverage for digest(), isInStruct(), setFieldName(), addTypeAnnotation()
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         IonHashWriter ihw = new IonHashWriterImpl(
                 IonTextWriterBuilder.standard().build(baos),
                 TestIonHasherProviders.getInstance("identity"));
 
-        assertArrayEquals(new byte[] {}, ihw.currentHash());
+        assertArrayEquals(new byte[] {}, ihw.digest());
 
         ihw.writeNull();
-        assertArrayEquals(new byte[] {0x0F}, ihw.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0x0f 0x0e)"), ihw.digest());
 
         ihw.stepIn(IonType.LIST);
-        assertArrayEquals(new byte[] {}, ihw.currentHash());
-
-        ihw.writeInt(5);
-        assertArrayEquals(new byte[] {0x20, 0x05}, ihw.currentHash());
-
+          assertArrayEquals(new byte[] {}, ihw.digest());
+          ihw.writeInt(5);
+          assertArrayEquals(new byte[] {}, ihw.digest());
         ihw.stepOut();
-        assertArrayEquals(new byte[] {(byte)0xB0, 0x20, 0x05}, ihw.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0xb0 0x0b 0x20 0x05 0x0e 0x0e)"), ihw.digest());
 
         ihw.writeNull();
-        assertArrayEquals(new byte[] {0x0F}, ihw.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes("(0x0b 0x0f 0x0e)"), ihw.digest());
 
         assertFalse(ihw.isInStruct());
 
         ihw.stepIn(IonType.STRUCT);
         assertTrue(ihw.isInStruct());
-        assertArrayEquals(new byte[] {}, ihw.currentHash());
 
         ihw.setFieldName("hello");
         ihw.addTypeAnnotation("ion");
         ihw.addTypeAnnotation("hash");
         ihw.writeSymbol("world");
-        assertArrayEquals(new byte[] {
-                (byte)0xE0, 0x70, 0x69, 0x6F, 0x6E,         // ion::
-                            0x70, 0x68, 0x61, 0x73, 0x68,   // hash::
-                      0x70, 0x77, 0x6F, 0x72, 0x6C, 0x64},  // world
-                ihw.currentHash());
 
         ihw.stepOut();
         assertFalse(ihw.isInStruct());
-        assertArrayEquals(new byte[] {
-                (byte)0xD0,                                     // {
-                    (byte)0x70, 0x68, 0x65, 0x6C, 0x6C, 0x6F,   //   hello:
-                    (byte)0xE0, 0x70, 0x69, 0x6F, 0x6E,         //   ion::
-                                0x70, 0x68, 0x61, 0x73, 0x68,   //   hash::
-                          0x70, 0x77, 0x6F, 0x72, 0x6C, 0x64},  //   world
-                ihw.currentHash());
+        assertArrayEquals(TestUtil.sexpToBytes(
+                  "(0x0b 0xd0"
+                + "   0x0c 0x0b 0x70 0x68 0x65 0x6c 0x6c 0x6f 0x0c 0x0e"     // hello:
+                + "   0x0c 0x0b 0xe0"
+                + "     0x0c 0x0b 0x70 0x69 0x6f 0x6e 0x0c 0x0e"             // ion::
+                + "     0x0c 0x0b 0x70 0x68 0x61 0x73 0x68 0x0c 0x0e"        // hash::
+                + "     0x0c 0x0b 0x70 0x77 0x6f 0x72 0x6c 0x64 0x0c 0x0e"   // world
+                + "   0x0c 0x0e"
+                + " 0x0e)"),
+                ihw.digest());
 
         ihw.finish();
-
         assertEquals("null [5] null {hello:ion::hash::world}",
                 new String(baos.toByteArray()));
     }
