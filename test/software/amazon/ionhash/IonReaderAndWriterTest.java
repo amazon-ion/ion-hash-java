@@ -1,9 +1,7 @@
 package software.amazon.ionhash;
 
 import org.junit.Test;
-import software.amazon.ion.IonInt;
 import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSexp;
 import software.amazon.ion.IonStruct;
 import software.amazon.ion.IonSystem;
 import software.amazon.ion.IonType;
@@ -13,7 +11,6 @@ import software.amazon.ion.system.IonSystemBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Iterator;
 
 import static software.amazon.ionhash.TestUtil.assertEquals;
 
