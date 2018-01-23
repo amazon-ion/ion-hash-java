@@ -1,5 +1,6 @@
 package software.amazon.ionhash;
 
+import org.junit.Assert;
 import software.amazon.ion.IonInt;
 import software.amazon.ion.IonSexp;
 import software.amazon.ion.IonSystem;
@@ -9,8 +10,6 @@ import software.amazon.ion.system.IonSystemBuilder;
 import java.io.ByteArrayOutputStream;
 import java.util.Iterator;
 
-import static org.junit.Assert.assertArrayEquals;
-
 /**
  * Test utility methods.
  */
@@ -18,10 +17,11 @@ class TestUtil {
     private static final IonSystem ION = IonSystemBuilder.standard().build();
 
     static void assertEquals(byte[] expected, byte[] actual) {
-        assertArrayEquals(
-                  "expected: " + bytesToHex(expected) + System.getProperty("line.separator")
-                + "  actual: " + bytesToHex(actual),
-                expected, actual);
+        assertEquals(null, expected, actual);
+    }
+
+    static void assertEquals(String message, byte[] expected, byte[] actual) {
+        Assert.assertEquals(message, bytesToHex(expected), bytesToHex(actual));
     }
 
     private static String bytesToHex(byte[] bytes) {
