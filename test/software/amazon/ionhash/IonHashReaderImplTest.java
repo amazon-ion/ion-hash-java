@@ -1,8 +1,10 @@
 package software.amazon.ionhash;
 
+import software.amazon.ion.IonContainer;
 import software.amazon.ion.IonReader;
 import software.amazon.ion.IonSystem;
 import software.amazon.ion.IonType;
+import software.amazon.ion.SymbolToken;
 import software.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
 
@@ -131,44 +133,17 @@ public class IonHashReaderImplTest {
         void traverse(IonHashReader ihr);
     }
 
-    /*
-    // pending ion-java support for SID 0
-
-    @Test
-    public void testUnresolvedSid0() {
-        // special SID 0 should NOT result in an exception
-        testIonTextBytes("(0xd3 0x80 0x21 0x01)");
-    }
-
     @Test(expected = IonHashException.class)
     public void testUnresolvedSid() {
-        // unresolved SIDs (except SID 0) should result in an exception
-        testIonTextBytes("(0xd3 0x8a 0x21 0x01)");
-    }
-
-    void testIonTextBytes(String ionTextBytes) {
-        IonContainer container = (IonContainer) ION.singleValue("(0xd3 0x80 0x21 0x01)");
+        // unresolved SIDs (such as SID 10 here) should result in an exception
+        IonContainer container = (IonContainer)ION.singleValue("(0xd3 0x8a 0x21 0x01)");
         byte[] ionBinary = IonHashRunner.containerToBytes(container);
         IonHashReader reader = new IonHashReaderImpl(
-                ION.newReader(ionBinary), new IdentityIonHasher());
-        traverse(reader);
+                ION.newReader(ionBinary),
+                TestIonHasherProviders.getInstance("identity"));
+        reader.next();
+        reader.next();
     }
-
-    private void traverse(IonReader reader) {
-        IonType iType;
-        while ((iType = reader.next()) != null) {
-            if (!reader.isNullValue() && IonType.isContainer(iType)) {
-                reader.stepIn();
-                traverse(reader);
-                reader.stepOut();
-            }
-            SymbolToken fieldNameSymbol = reader.getFieldNameSymbol();
-            if (fieldNameSymbol != null) {
-                System.out.println("fieldNameSymbol.sid: " + fieldNameSymbol.getSid());
-            }
-        }
-    }
-    */
 
     /**
      * Asserts that IonHashReaderImpl's handling of the IonReader contract matches that

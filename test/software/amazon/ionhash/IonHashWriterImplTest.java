@@ -1,9 +1,11 @@
 package software.amazon.ionhash;
 
+import software.amazon.ion.IonContainer;
 import software.amazon.ion.IonReader;
 import software.amazon.ion.IonSystem;
 import software.amazon.ion.IonType;
 import software.amazon.ion.IonWriter;
+import software.amazon.ion.SymbolToken;
 import software.amazon.ion.system.IonBinaryWriterBuilder;
 import software.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
@@ -117,6 +119,20 @@ public class IonHashWriterImplTest {
         writer.finish();
 
         return baos.toByteArray();
+    }
+
+    @Test(expected = IonHashException.class)
+    public void testUnresolvedSid() throws IOException {
+        // unresolved SIDs (such as SID 10 here) should result in an exception
+        SymbolToken symbolUnresolvedSid = new SymbolToken() {
+            @Override public String getText()    { return null; }
+            @Override public String assumeText() { return null; }
+            @Override public int    getSid()     { return   10; }
+        };
+        IonHashWriter writer = new IonHashWriterImpl(
+                IonBinaryWriterBuilder.standard().build(new ByteArrayOutputStream()),
+                TestIonHasherProviders.getInstance("identity"));
+        writer.writeSymbolToken(symbolUnresolvedSid);
     }
 
     interface TestHelper {
