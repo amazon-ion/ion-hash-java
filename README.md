@@ -59,15 +59,12 @@ public class Example {
         hashWriter.stepIn(IonType.STRUCT);
           hashWriter.setFieldName("first_name");
           hashWriter.writeString("Amanda");
-          printBytesHex(hashWriter.currentHash());
           hashWriter.setFieldName("middle_name");
           hashWriter.writeString("Amanda");
-          printBytesHex(hashWriter.currentHash());
           hashWriter.setFieldName("last_name");
           hashWriter.writeString("Smith");
-          printBytesHex(hashWriter.currentHash());
         hashWriter.stepOut();
-        printBytesHex(hashWriter.currentHash());
+        printBytesHex(hashWriter.digest());
 
         byte[] data = baos.toByteArray();
         System.out.println("Ion data: " + ion.singleValue(data));
@@ -87,16 +84,8 @@ public class Example {
 
         System.out.println("reader");
         hashReader.next();    // position reader at the first value
-        hashReader.stepIn();
-          hashReader.next();  // position reader at the first value
-          hashReader.next();  // position reader just after first value
-          printBytesHex(hashReader.currentHash());
-          hashReader.next();
-          printBytesHex(hashReader.currentHash());
-          hashReader.next();
-          printBytesHex(hashReader.currentHash());
-        hashReader.stepOut();
-        printBytesHex(hashReader.currentHash());
+        hashReader.next();    // position reader just after the struct
+        printBytesHex(hashReader.digest());
 
         // cleanup
         hashReader.close();
@@ -114,29 +103,18 @@ public class Example {
 Upon execution, the above code produces the following output:
 ```
 writer
-6b d6 32 23 7a 76 53 8e ff dd 2b 70 03 e5 c9 67 fa 58 74 8b 82 1e ea 7b 9e ad 8c e5 0e ba 95 c3 
-6b d6 32 23 7a 76 53 8e ff dd 2b 70 03 e5 c9 67 fa 58 74 8b 82 1e ea 7b 9e ad 8c e5 0e ba 95 c3 
-4f 0a 04 4b 94 ce 84 7d 79 29 a5 92 b9 7b fd 72 d3 c7 cc d1 64 26 ec 18 ee 84 dc 2f 57 a9 71 6d 
-44 07 fa 14 fe fb 1e ec f5 7f 51 b3 af 97 ec e6 c2 09 11 9d 18 0c bd b1 88 07 a7 ab f9 7d 3d cc 
+37 82 6e 71 92 a1 e4 e1 24 aa 73 f9 85 0f f1 0f 1c b5 cc ca f2 07 b0 9e 65 af 42 56 ae 8c 80 55 
 Ion data: {first_name:"Amanda",middle_name:"Amanda",last_name:"Smith"}
 reader
-6b d6 32 23 7a 76 53 8e ff dd 2b 70 03 e5 c9 67 fa 58 74 8b 82 1e ea 7b 9e ad 8c e5 0e ba 95 c3 
-6b d6 32 23 7a 76 53 8e ff dd 2b 70 03 e5 c9 67 fa 58 74 8b 82 1e ea 7b 9e ad 8c e5 0e ba 95 c3 
-4f 0a 04 4b 94 ce 84 7d 79 29 a5 92 b9 7b fd 72 d3 c7 cc d1 64 26 ec 18 ee 84 dc 2f 57 a9 71 6d 
-44 07 fa 14 fe fb 1e ec f5 7f 51 b3 af 97 ec e6 c2 09 11 9d 18 0c bd b1 88 07 a7 ab f9 7d 3d cc 
+37 82 6e 71 92 a1 e4 e1 24 aa 73 f9 85 0f f1 0f 1c b5 cc ca f2 07 b0 9e 65 af 42 56 ae 8c 80 55 
 ```
 A few items to note:
-* IonHashReaders/IonHashWriters allow the caller to retrieve the hash of the value that was just read or written (or "stepped out" of)
-* if the caller is only interested in verifying the hash of a container, there is no need to stepIn/iterate/stepOut of the struct;  the caller may simply next past the container, as in:
+* IonHashReaders/IonHashWriters allow the caller to retrieve the digest of the value that was just read or written (or "stepped out" of)
+* calling digest() on an IonHashReader/IonHashWriter will only return a byte[] containing a digest value if called at the same level at which the IonHashReader/IonHashWriter was created;  otherwise, an empty byte array is returned
+* if the caller is only interested in verifying the hash of a container, there is no need to stepIn/iterate/stepOut of the struct;  the caller may simply next past the container, as demonstrated above by this code:
 ```java
     System.out.println("reader");
     hashReader.next();    // position reader at the first value
     hashReader.next();    // position reader just after the struct
     printBytesHex(hashReader.currentHash());
 ```
-```
-  would output:
-    reader
-    44 07 fa 14 fe fb 1e ec f5 7f 51 b3 af 97 ec e6 c2 09 11 9d 18 0c bd b1 88 07 a7 ab f9 7d 3d cc 
-```
-* while struct field names are used when computing the hash of the containing struct, they are NOT represented in the hash immediately after a field is read or written (in the above example, note that the hashes of the first_name:"Amanda" and middle_name:"Amanda" fields are identical)
