@@ -1,7 +1,7 @@
 <project>
 
   <modelVersion>4.0.0</modelVersion>
-  <groupId>software.amazon.ionhash</groupId>
+  <groupId>software.amazon.ion</groupId>
   <artifactId>ion-hash-java</artifactId>
   <version>0.12.1-SNAPSHOT</version>
   <packaging>jar</packaging>
