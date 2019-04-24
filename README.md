@@ -32,12 +32,12 @@ import com.amazon.ion.IonSystem;
 import com.amazon.ion.IonType;
 import com.amazon.ion.IonWriter;
 import com.amazon.ion.system.IonSystemBuilder;
-import software.amazon.ionhash.IonHashReader;
-import software.amazon.ionhash.IonHashReaderBuilder;
-import software.amazon.ionhash.IonHashWriter;
-import software.amazon.ionhash.IonHashWriterBuilder;
-import software.amazon.ionhash.IonHasherProvider;
-import software.amazon.ionhash.MessageDigestIonHasherProvider;
+import com.amazon.ionhash.IonHashReader;
+import com.amazon.ionhash.IonHashReaderBuilder;
+import com.amazon.ionhash.IonHashWriter;
+import com.amazon.ionhash.IonHashWriterBuilder;
+import com.amazon.ionhash.IonHasherProvider;
+import com.amazon.ionhash.MessageDigestIonHasherProvider;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
