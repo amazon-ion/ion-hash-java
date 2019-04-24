@@ -4,6 +4,7 @@ import com.amazon.ion.IonContainer;
 import com.amazon.ion.IonReader;
 import com.amazon.ion.IonSystem;
 import com.amazon.ion.IonType;
+import com.amazon.ion.UnknownSymbolException;
 import com.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
 
@@ -132,7 +133,7 @@ public class IonHashReaderImplTest {
         void traverse(IonHashReader ihr);
     }
 
-    @Test(expected = IonHashException.class)
+    @Test(expected = UnknownSymbolException.class)
     public void testUnresolvedSid() {
         // unresolved SIDs (such as SID 10 here) should result in an exception
         IonContainer container = (IonContainer)ION.singleValue("(0xd3 0x8a 0x21 0x01)");
