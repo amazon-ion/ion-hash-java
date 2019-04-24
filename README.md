@@ -2,8 +2,8 @@
 An implementation of [Amazon Ion Hash](http://amzn.github.io/ion-hash-spec) in Java.
 
 [![Build Status](https://travis-ci.org/amzn/ion-hash-java.svg?branch=master)](https://travis-ci.org/amzn/ion-hash-java)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/software.amazon.ion/ion-hash-java/badge.svg)](https://maven-badges.herokuapp.com/maven-central/software.amazon.ion/ion-hash-java)
-[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/software.amazon.ion/ion-hash-java/badge.svg)](http://www.javadoc.io/doc/software.amazon.ion/ion-hash-java)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java)
+[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/com.amazon.ion/ion-hash-java/badge.svg)](http://www.javadoc.io/doc/com.amazon.ion/ion-hash-java)
 
 ## Depending on the Library
 To start using `ion-hash-java` in your code with Maven, insert the following
@@ -12,7 +12,7 @@ desired version of the library (e.g., 1.0.0):
 
 ```xml
 <dependency>
-  <groupId>software.amazon.ion</groupId>
+  <groupId>com.amazon.ion</groupId>
   <artifactId>ion-hash-java</artifactId>
   <version>${version}</version>
 </dependency>
@@ -27,17 +27,17 @@ tiem, verifying the hash matches when the data is read.
 ```java
 package ionhash.example;
 
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonType;
-import software.amazon.ion.IonWriter;
-import software.amazon.ion.system.IonSystemBuilder;
-import software.amazon.ionhash.IonHashReader;
-import software.amazon.ionhash.IonHashReaderBuilder;
-import software.amazon.ionhash.IonHashWriter;
-import software.amazon.ionhash.IonHashWriterBuilder;
-import software.amazon.ionhash.IonHasherProvider;
-import software.amazon.ionhash.MessageDigestIonHasherProvider;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonType;
+import com.amazon.ion.IonWriter;
+import com.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ionhash.IonHashReader;
+import com.amazon.ionhash.IonHashReaderBuilder;
+import com.amazon.ionhash.IonHashWriter;
+import com.amazon.ionhash.IonHashWriterBuilder;
+import com.amazon.ionhash.IonHasherProvider;
+import com.amazon.ionhash.MessageDigestIonHasherProvider;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
