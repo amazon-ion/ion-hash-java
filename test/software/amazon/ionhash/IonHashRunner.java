@@ -1,15 +1,15 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonBool;
-import software.amazon.ion.IonContainer;
-import software.amazon.ion.IonInt;
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSexp;
-import software.amazon.ion.IonStruct;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonValue;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonBool;
+import com.amazon.ion.IonContainer;
+import com.amazon.ion.IonInt;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonSexp;
+import com.amazon.ion.IonStruct;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonValue;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.system.IonSystemBuilder;
 import software.amazon.ionhash.TestIonHasherProviders.TestIonHasherProvider;
 import org.junit.runner.Description;
 import org.junit.runner.Runner;

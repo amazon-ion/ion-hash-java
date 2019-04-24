@@ -1,6 +1,6 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonWriter;
+import com.amazon.ion.IonWriter;
 
 /**
  * IonWriter extension that provides the hash of the IonValue just written

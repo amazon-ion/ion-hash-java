@@ -1,11 +1,11 @@
 package software.amazon.ionhash;
 
 import org.junit.Assert;
-import software.amazon.ion.IonInt;
-import software.amazon.ion.IonSexp;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonValue;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonInt;
+import com.amazon.ion.IonSexp;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonValue;
+import com.amazon.ion.system.IonSystemBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Iterator;

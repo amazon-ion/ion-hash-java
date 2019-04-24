@@ -1,8 +1,8 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonType;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.Timestamp;
+import com.amazon.ion.IonType;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.Timestamp;
 
 import java.io.Closeable;
 import java.io.IOException;

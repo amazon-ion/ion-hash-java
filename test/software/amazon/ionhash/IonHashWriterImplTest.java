@@ -1,15 +1,15 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonContainer;
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonType;
-import software.amazon.ion.IonWriter;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.system.IonBinaryWriterBuilder;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonContainer;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonType;
+import com.amazon.ion.IonWriter;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.system.IonBinaryWriterBuilder;
+import com.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
-import software.amazon.ion.system.IonTextWriterBuilder;
+import com.amazon.ion.system.IonTextWriterBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;

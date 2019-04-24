@@ -1,6 +1,6 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonReader;
+import com.amazon.ion.IonReader;
 
 /**
  * Build a new {@link IonHashReader} for the given {@link IonReader} and {@link IonHasherProvider}.

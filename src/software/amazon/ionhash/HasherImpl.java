@@ -1,10 +1,10 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonType;
-import software.amazon.ion.IonWriter;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.Timestamp;
-import software.amazon.ion.impl.bin.PrivateIonHashTrampoline;
+import com.amazon.ion.IonType;
+import com.amazon.ion.IonWriter;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.Timestamp;
+import com.amazon.ion.impl.bin.PrivateIonHashTrampoline;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;

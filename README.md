@@ -27,11 +27,11 @@ tiem, verifying the hash matches when the data is read.
 ```java
 package ionhash.example;
 
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonType;
-import software.amazon.ion.IonWriter;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonType;
+import com.amazon.ion.IonWriter;
+import com.amazon.ion.system.IonSystemBuilder;
 import software.amazon.ionhash.IonHashReader;
 import software.amazon.ionhash.IonHashReaderBuilder;
 import software.amazon.ionhash.IonHashWriter;

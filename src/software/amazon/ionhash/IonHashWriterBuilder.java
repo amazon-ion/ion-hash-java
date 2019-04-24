@@ -1,6 +1,6 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonWriter;
+import com.amazon.ion.IonWriter;
 
 import java.io.IOException;
 

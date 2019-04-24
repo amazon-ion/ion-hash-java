@@ -1,7 +1,7 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;

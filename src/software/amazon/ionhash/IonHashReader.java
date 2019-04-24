@@ -1,6 +1,6 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonReader;
+import com.amazon.ion.IonReader;
 
 /**
  * IonReader extension that provides the hash of the IonValue just nexted

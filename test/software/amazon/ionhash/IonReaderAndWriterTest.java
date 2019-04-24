@@ -1,13 +1,13 @@
 package software.amazon.ionhash;
 
 import org.junit.Test;
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonStruct;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonType;
-import software.amazon.ion.IonValue;
-import software.amazon.ion.IonWriter;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonStruct;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonType;
+import com.amazon.ion.IonValue;
+import com.amazon.ion.IonWriter;
+import com.amazon.ion.system.IonSystemBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -1,11 +1,11 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonContainer;
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.IonType;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonContainer;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.IonType;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.system.IonSystemBuilder;
 import org.junit.Test;
 
 import java.io.File;

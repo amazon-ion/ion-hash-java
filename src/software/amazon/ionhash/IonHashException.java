@@ -1,6 +1,6 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.IonException;
+import com.amazon.ion.IonException;
 
 /**
  * Thrown for unexpected or error conditions while hashing Ion data.

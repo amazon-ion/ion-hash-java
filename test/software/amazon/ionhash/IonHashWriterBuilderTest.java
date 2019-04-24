@@ -1,8 +1,8 @@
 package software.amazon.ionhash;
 
 import org.junit.Test;
-import software.amazon.ion.IonSystem;
-import software.amazon.ion.system.IonSystemBuilder;
+import com.amazon.ion.IonSystem;
+import com.amazon.ion.system.IonSystemBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -1,12 +1,12 @@
 package software.amazon.ionhash;
 
-import software.amazon.ion.Decimal;
-import software.amazon.ion.IntegerSize;
-import software.amazon.ion.IonReader;
-import software.amazon.ion.IonType;
-import software.amazon.ion.SymbolTable;
-import software.amazon.ion.SymbolToken;
-import software.amazon.ion.Timestamp;
+import com.amazon.ion.Decimal;
+import com.amazon.ion.IntegerSize;
+import com.amazon.ion.IonReader;
+import com.amazon.ion.IonType;
+import com.amazon.ion.SymbolTable;
+import com.amazon.ion.SymbolToken;
+import com.amazon.ion.Timestamp;
 
 import java.io.IOException;
 import java.math.BigDecimal;
