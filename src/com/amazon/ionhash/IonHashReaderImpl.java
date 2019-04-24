@@ -274,4 +274,16 @@ class IonHashReaderImpl implements IonHashReader {
     public <T> T asFacet(Class<T> facetType) {
         return delegate.asFacet(facetType);
     }
+
+    @Override
+    @Deprecated
+    public boolean hasNext() {
+        return delegate.hasNext();
+    }
+
+    @Override
+    @Deprecated
+    public int getFieldId() {
+        return delegate.getFieldId();
+    }
 }

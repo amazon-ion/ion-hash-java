@@ -4,7 +4,6 @@ import com.amazon.ion.IonType;
 import com.amazon.ion.IonWriter;
 import com.amazon.ion.SymbolToken;
 import com.amazon.ion.Timestamp;
-import com.amazon.ion.impl.bin.PrivateIonHashTrampoline;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
@@ -143,10 +142,11 @@ class HasherImpl implements Hasher {
         private final ByteArrayOutputStream baos;
         private final IonWriter writer;
 
+        @SuppressWarnings("deprecation")
         private SymbolHasher() {
             try {
                 this.baos = new ByteArrayOutputStream();
-                writer = PrivateIonHashTrampoline.newIonWriter(baos);
+                writer = com.amazon.ion.impl.bin._PrivateIon_HashTrampoline.newIonWriter(baos);
             } catch (IOException e) {
                 throw new IonHashException(e);
             }
@@ -331,11 +331,12 @@ class HasherImpl implements Hasher {
         private final IonWriter scalarWriter;
         private final ByteArrayOutputStream scalarBaos;
 
+        @SuppressWarnings("deprecation")
         ScalarHasherImpl(IonHasher hasher) {
             super(hasher, null, null);
             try {
                 this.scalarBaos = new ByteArrayOutputStream();
-                this.scalarWriter = PrivateIonHashTrampoline.newIonWriter(scalarBaos);
+                this.scalarWriter = com.amazon.ion.impl.bin._PrivateIon_HashTrampoline.newIonWriter(scalarBaos);
             } catch (IOException e) {
                 throw new IonHashException(e);
             }
@@ -387,7 +388,7 @@ class HasherImpl implements Hasher {
         }
 
         public void updateFloat(double value) throws IOException {
-            if (new Double(value).equals(0.0)) {
+            if (Double.valueOf(value).equals(0.0)) {
                 // value is 0.0, not -0.0
                 writeScalar(IonType.FLOAT, null, FLOAT_POSITIVE_ZERO_PARTS);
             } else {

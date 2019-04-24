@@ -2,6 +2,7 @@ package com.amazon.ionhash;
 
 import com.amazon.ion.IonReader;
 import com.amazon.ion.IonType;
+import com.amazon.ion.IonValue;
 import com.amazon.ion.IonWriter;
 import com.amazon.ion.SymbolTable;
 import com.amazon.ion.SymbolToken;
@@ -13,6 +14,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -83,7 +85,7 @@ class IonHashWriterImpl implements IonHashWriter {
     @Override
     public void addTypeAnnotation(String annot) {
         if (annotations == EMPTY_SYMBOLTOKEN_LIST) {
-            annotations = new ArrayList();
+            annotations = new ArrayList<SymbolToken>();
         }
         annotations.add(Hasher.newSymbolToken(annot));
         delegate.addTypeAnnotation(annot);
@@ -208,6 +210,12 @@ class IonHashWriterImpl implements IonHashWriter {
         delegate.writeTimestamp(value);
     }
 
+    @Override
+    @Deprecated
+    public void writeTimestampUTC(Date value) throws IOException {
+        writeTimestamp(Timestamp.forDateZ(value));
+    }
+
     private void updateScalar(Updatable scalarUpdater) throws IOException {
         hasher.scalar().withFieldName(fieldName);
         hasher.scalar().withAnnotations(annotations());
@@ -296,6 +304,11 @@ class IonHashWriterImpl implements IonHashWriter {
         } while (iterate && (type = reader.next()) != null);
     }
 
+    @Override
+    @Deprecated
+    public void writeValue(IonValue value) throws IOException {
+        value.writeTo(this);
+    }
 
     ///////// The remaining methods are all handled solely by the delegate ///////////
 
@@ -317,5 +330,10 @@ class IonHashWriterImpl implements IonHashWriter {
     @Override
     public SymbolTable getSymbolTable() {
         return delegate.getSymbolTable();
+    }
+
+    @Override
+    public <T> T asFacet(Class<T> facetType) {
+        return delegate.asFacet(facetType);
     }
 }

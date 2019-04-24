@@ -20,6 +20,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -42,8 +43,10 @@ public class IonHashRunner extends Runner {
     public IonHashRunner(Class<? extends IonHashTestSuite.IonHashTester> testClass) {
         this.testClass = testClass;
         try {
-            this.testObject = this.testClass.newInstance();
-        } catch (IllegalAccessException | InstantiationException e) {
+            this.testObject = this.testClass.getDeclaredConstructor().newInstance();
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e.getCause());
+        } catch (IllegalAccessException | InstantiationException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
     }
