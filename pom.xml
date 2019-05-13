@@ -1,12 +1,11 @@
 <project>
-
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.amazon.ion</groupId>
   <artifactId>ion-hash-java</artifactId>
   <version>0.14.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
-  <name>ion-hash-java</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   <description>
     A Java implementation of the Amazon Ion Hash specification.
   </description>
@@ -34,10 +33,23 @@
     <url>git@github.com:amzn/ion-hash-java.git</url>
   </scm>
 
+  <!-- http://central.sonatype.org/pages/ossrh-guide.html -->
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    <repository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
+
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>1.8</maven.compiler.source>
-    <maven.compiler.target>1.8</maven.compiler.target>
+    <maven.build.timestamp.format>yyyy</maven.build.timestamp.format>
+    <build.year>${maven.build.timestamp}</build.year>
+    <jdkVersion>1.8</jdkVersion>
   </properties>
 
   <dependencies>
@@ -61,29 +73,137 @@
     <testSourceDirectory>test</testSourceDirectory>
     <plugins>
       <plugin>
-	<groupId>org.apache.maven.plugins</groupId>
-	<artifactId>maven-compiler-plugin</artifactId>
-	<version>3.8.0</version>
-	<configuration>
-	  <compilerArgs>
-	    <arg>-Xlint:deprecation,unchecked</arg>
-	  </compilerArgs>
-	</configuration>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.0</version>
+        <configuration>
+          <source>${jdkVersion}</source>
+          <target>${jdkVersion}</target>
+          <compilerArgs>
+            <arg>-Xlint:deprecation,unchecked</arg>
+          </compilerArgs>
+        </configuration>
       </plugin>
 
-      <!-- Run the unit tests. -->
+      <!-- run the unit tests -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.19.1</version>
-        <configuration>
-          <excludes>
-            <exclude>**/*TestCase</exclude>
-          </excludes>
-        </configuration>
       </plugin>
-      <!-- TODO findbugs, checkstyle -->
+
+      <!-- static site generation with all reports -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-site-plugin</artifactId>
+        <version>3.7.1</version>
+      </plugin>
     </plugins>
   </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>2.10.3</version>
+        <configuration>
+          <source>8</source>
+        </configuration>
+        <reportSets>
+          <reportSet>
+            <configuration>
+              <header>Amazon Ion Hash Java ${project.version} API Reference</header>
+              <encoding>UTF-8</encoding>
+              <overview>${project.basedir}/src/com/amazon/ionhash/overview.html</overview>
+              <doctitle>Amazon Ion Hash Java ${project.version} API Reference</doctitle>
+              <bottom><![CDATA[<center>Copyright &#169; 2017&ndash;${build.year} Amazon.com. All Rights Reserved.</center>]]></bottom>
+              <additionalparam>-Xdoclint:none</additionalparam>
+            </configuration>
+            <reports>
+              <report>javadoc-no-fork</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <properties>
+        <jdkVersion>${jdkVersion}</jdkVersion>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <!-- package the source jar -->
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.2.1</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <!-- package the javadoc jar -->
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>2.10.3</version>
+            <configuration>
+              <source>8</source>
+              <header>Amazon Ion Hash Java ${project.version} API Reference</header>
+              <encoding>UTF-8</encoding>
+              <overview>${project.basedir}/src/com/amazon/ionhash/overview.html</overview>
+              <doctitle>Amazon Ion Hash Java ${project.version} API Reference</doctitle>
+              <bottom><![CDATA[<center>Copyright &#169; 2017&ndash;${build.year} Amazon.com. All Rights Reserved.</center>]]></bottom>
+              <additionalparam>-Xdoclint:none</additionalparam>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <!-- GPG signing -->
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.5</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <!-- publish the artifacts -->
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.6.3</version>
+            <extensions>true</extensions>
+            <configuration>
+              <serverId>ossrh</serverId>
+              <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+              <autoReleaseAfterClose>true</autoReleaseAfterClose>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
 
