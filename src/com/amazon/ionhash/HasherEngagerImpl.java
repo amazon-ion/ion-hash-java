@@ -14,7 +14,7 @@ import static com.amazon.ionhash.HasherImpl.EMPTY_BYTE_ARRAY;
  * Hasher decorator that allows the caller to disable/enable
  * calls to the underlying hasher.
  */
-public final class HasherEngagerImpl implements Hasher {
+final class HasherEngagerImpl implements Hasher {
     private final Hasher delegate;
     private boolean enabled = true;
 
