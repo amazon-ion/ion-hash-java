@@ -3,7 +3,7 @@ An implementation of [Amazon Ion Hash](http://amzn.github.io/ion-hash-spec) in J
 
 [![Build Status](https://travis-ci.org/amzn/ion-hash-java.svg?branch=master)](https://travis-ci.org/amzn/ion-hash-java)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java)
-[![Javadoc](https://javadoc-emblem.rhcloud.com/doc/com.amazon.ion/ion-hash-java/badge.svg)](http://www.javadoc.io/doc/com.amazon.ion/ion-hash-java)
+[![Javadoc](https://javadoc-badge.appspot.com/com.amazon.ion/ion-hash-java.svg?label=javadoc)](http://www.javadoc.io/doc/com.amazon.ion/ion-hash-java)
 
 ## Depending on the Library
 To start using `ion-hash-java` in your code with Maven, insert the following
