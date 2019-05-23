@@ -16,7 +16,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.amazon.ion</groupId>
   <artifactId>ion-hash-java</artifactId>
-  <version>0.14.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <packaging>jar</packaging>
 
   <name>${project.groupId}:${project.artifactId}</name>
@@ -147,7 +147,7 @@
     <profile>
       <id>release</id>
       <properties>
-        <jdkVersion>${jdkVersion}</jdkVersion>
+        <jdkVersion>1.8</jdkVersion>
       </properties>
       <build>
         <plugins>
