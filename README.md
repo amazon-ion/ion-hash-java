@@ -1,5 +1,5 @@
 # Amazon Ion Hash Java
-An implementation of [Amazon Ion Hash](http://amzn.github.io/ion-hash-spec) in Java.
+An implementation of [Amazon Ion Hash](http://amzn.github.io/ion-hash) in Java.
 
 [![Build Status](https://travis-ci.org/amzn/ion-hash-java.svg?branch=master)](https://travis-ci.org/amzn/ion-hash-java)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.amazon.ion/ion-hash-java)
