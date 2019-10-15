@@ -47,8 +47,7 @@ import static org.junit.Assert.assertEquals;
  */
 public class IonHashRunner extends Runner {
     private final static IonSystem ION = IonSystemBuilder.standard().build();
-    final static String TESTDATA_PATH
-            = String.format("test/%s", IonHashRunner.class.getPackage().getName().replace('.', '/'));
+    final static String TESTDATA_PATH = "ion-hash-test";
     final static String ION_HASH_TESTS_PATH = TESTDATA_PATH + "/ion_hash_tests.ion";
 
     private final Class<? extends IonHashTestSuite.IonHashTester> testClass;
