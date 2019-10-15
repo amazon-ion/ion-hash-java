@@ -36,7 +36,7 @@ public class BigListOfNaughtyStringsTest {
     public void test() throws IOException {
         try (
             BufferedReader reader = new BufferedReader(
-                    new FileReader(IonHashRunner.TESTDATA_PATH + "/big_list_of_naughty_strings.txt"));
+                    new FileReader(IonHashTestRunner.TESTDATA_PATH + "/big_list_of_naughty_strings.txt"));
         ) {
             String line;
             while ((line = reader.readLine()) != null) {

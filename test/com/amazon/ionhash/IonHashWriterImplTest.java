@@ -100,7 +100,7 @@ public class IonHashWriterImplTest {
 
     @Test
     public void testIonWriterContract_writeValue() throws IOException {
-        File file = new File(IonHashRunner.ION_HASH_TESTS_PATH);
+        File file = new File(IonHashTestRunner.ION_HASH_TESTS_PATH);
         byte[] expected = exerciseWriter(ION.newReader(new FileReader(file)), false, (r, w) -> { r.next(); w.writeValue(r); });
         byte[] actual   = exerciseWriter(ION.newReader(new FileReader(file)), true,  (r, w) -> { r.next(); w.writeValue(r); });
         assertTrue(expected.length > 10);
@@ -110,7 +110,7 @@ public class IonHashWriterImplTest {
 
     @Test
     public void testIonWriterContract_writeValues() throws IOException {
-        File file = new File(IonHashRunner.ION_HASH_TESTS_PATH);
+        File file = new File(IonHashTestRunner.ION_HASH_TESTS_PATH);
         byte[] expected = exerciseWriter(ION.newReader(new FileReader(file)), false, (r, w) -> w.writeValues(r));
         byte[] actual   = exerciseWriter(ION.newReader(new FileReader(file)), true,  (r, w) -> w.writeValues(r));
         assertTrue(expected.length > 1000);

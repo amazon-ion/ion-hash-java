@@ -27,10 +27,10 @@ import java.security.NoSuchAlgorithmException;
  * FOR TEST PURPOSES ONLY!!!
  *
  * Each call to hash() simply returns the input byte[], unmodified.
- * Tracks all hash() calls so IonHashRunner can verify correct behavior
+ * Tracks all hash() calls so IonHashTestRunner can verify correct behavior
  * of IonhashingReaderImpl.
  *
- * @see IonHashRunner
+ * @see IonHashTestRunner
  */
 class TestIonHasherProviders {
     abstract static class TestIonHasherProvider implements IonHasherProvider {
