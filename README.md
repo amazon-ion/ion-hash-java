@@ -22,7 +22,7 @@ desired version of the library (e.g., 1.0.0):
 The following example computes a hash while writing a simple Ion struct,
 then computes the same hash while reading the written value.  This illustrates
 a typical pattern of writing data, computing its hash, then at some subsequent
-tiem, verifying the hash matches when the data is read.
+time, verifying the hash matches when the data is read.
 
 ```java
 package ionhash.example;
