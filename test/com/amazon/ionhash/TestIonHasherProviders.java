@@ -91,6 +91,7 @@ class TestIonHasherProviders {
 
                                 @Override
                                 public void update(byte[] bytes) {
+                                    addHashToLog("update", bytes);
                                     md.update(bytes);
                                 }
 
