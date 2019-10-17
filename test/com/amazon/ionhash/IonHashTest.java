@@ -31,19 +31,19 @@ import java.io.InputStream;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
     // IonHashReader tests
-    IonHashTestSuite.BinaryTest.class,
-    IonHashTestSuite.DomTest.class,
-    IonHashTestSuite.TextTest.class,
-    IonHashTestSuite.BinaryInputStreamTest.class,
-    IonHashTestSuite.TextNoStepInTest.class,
+    IonHashTest.BinaryTest.class,
+    IonHashTest.DomTest.class,
+    IonHashTest.TextTest.class,
+    IonHashTest.BinaryInputStreamTest.class,
+    IonHashTest.TextNoStepInTest.class,
 
     // IonHashWriter tests
-    IonHashTestSuite.WriterTest.class,
+    IonHashTest.WriterTest.class,
 
     // digest cache tests
-    IonHashTestSuite.DigestCacheTest.class,
+    IonHashTest.DigestCacheTest.class,
 })
-public class IonHashTestSuite {
+public class IonHashTest {
     final static IonSystem ION = IonSystemBuilder.standard().build();
 
     abstract static class IonHashTester {
@@ -88,7 +88,7 @@ public class IonHashTestSuite {
     /**
      * verifies behavior when using a reader over binary
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class BinaryTest extends IonHashTester {
         @Override
         public IonReader getIonReader(String ionText) {
@@ -107,7 +107,7 @@ public class IonHashTestSuite {
     /**
      * verifies behavior when using a reader over a DOM
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class DomTest extends IonHashTester {
         @Override
         public IonReader getIonReader(String ionText) {
@@ -118,14 +118,14 @@ public class IonHashTestSuite {
     /**
      * verifies behavior when using a text reader
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class TextTest extends IonHashTester {
     }
 
     /**
      * verifies behavior when caller next()s past everything
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class TextNoStepInTest extends TextTest {
         @Override
         void traverse(IonHashReader reader) {
@@ -137,7 +137,7 @@ public class IonHashTestSuite {
     /**
      * verify behavior when using a reader over an InputStream
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class BinaryInputStreamTest extends IonHashTester {
         @Override
         public IonReader getIonReader(String ionText) {
@@ -170,7 +170,7 @@ public class IonHashTestSuite {
     /**
      * verify behavior of an IonHashWriter
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class WriterTest extends IonHashTester {
         @Override
         void traverse(IonReader reader, TestIonHasherProvider hasherProvider) throws IOException {
@@ -191,7 +191,7 @@ public class IonHashTestSuite {
      * this is accomplished by converting the entries of the expectedHashLog into a
      * single, "final_digest" assertion
      */
-    @RunWith(IonHashRunner.class)
+    @RunWith(IonHashTestRunner.class)
     public static class DigestCacheTest extends WriterTest {
         @Override
         void traverse(IonReader reader, TestIonHasherProvider hasherProvider) throws IOException {

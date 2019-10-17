@@ -151,7 +151,7 @@ public class IonHashReaderImplTest {
     public void testUnresolvedSid() {
         // unresolved SIDs (such as SID 10 here) should result in an exception
         IonContainer container = (IonContainer)ION.singleValue("(0xd3 0x8a 0x21 0x01)");
-        byte[] ionBinary = IonHashRunner.containerToBytes(container);
+        byte[] ionBinary = IonHashTestRunner.containerToBytes(container);
         IonHashReader reader = new IonHashReaderImpl(
                 ION.newReader(ionBinary),
                 TestIonHasherProviders.getInstance("identity"));
@@ -166,7 +166,7 @@ public class IonHashReaderImplTest {
      */
     @Test
     public void testIonReaderContract() throws IOException {
-        File file = new File(IonHashRunner.ION_HASH_TESTS_PATH);
+        File file = new File(IonHashTestRunner.ION_HASH_TESTS_PATH);
 
         IonReader ir = ION.newReader(new FileReader(file));
 

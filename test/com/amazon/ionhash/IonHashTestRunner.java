@@ -42,19 +42,18 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 
 /**
- * JUnit Runner that executes IonHashTestSuite.IonHashTest implementations
+ * JUnit Runner that executes IonHashTest.IonHashTest implementations
  * against the test cases defined in ion_hash_tests.ion.
  */
-public class IonHashRunner extends Runner {
+public class IonHashTestRunner extends Runner {
     private final static IonSystem ION = IonSystemBuilder.standard().build();
-    final static String TESTDATA_PATH
-            = String.format("test/%s", IonHashRunner.class.getPackage().getName().replace('.', '/'));
+    final static String TESTDATA_PATH = "ion-hash-test";
     final static String ION_HASH_TESTS_PATH = TESTDATA_PATH + "/ion_hash_tests.ion";
 
-    private final Class<? extends IonHashTestSuite.IonHashTester> testClass;
-    private final IonHashTestSuite.IonHashTester testObject;
+    private final Class<? extends IonHashTest.IonHashTester> testClass;
+    private final IonHashTest.IonHashTester testObject;
 
-    public IonHashRunner(Class<? extends IonHashTestSuite.IonHashTester> testClass) {
+    public IonHashTestRunner(Class<? extends IonHashTest.IonHashTester> testClass) {
         this.testClass = testClass;
         try {
             this.testObject = this.testClass.getDeclaredConstructor().newInstance();
