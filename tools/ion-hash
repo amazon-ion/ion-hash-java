@@ -2,5 +2,5 @@
 
 basedir=$(dirname "$0")
 
-java -cp "$basedir/../../target/classes:$basedir/../../target/lib/*" com.amazon.ionhash.tools.Cli $@
+java -cp "$basedir/../target/classes:$basedir/../target/lib/*" com.amazon.ionhash.tools.Cli $@
 
