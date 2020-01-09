@@ -8,4 +8,7 @@ jdk:
   - oraclejdk8
   - oraclejdk9
   - oraclejdk11
+script:
+  - echo hello > test.ion
+  - tools/ion-hash md5 test.ion
 
