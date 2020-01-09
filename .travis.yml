@@ -9,6 +9,7 @@ jdk:
   - oraclejdk9
   - oraclejdk11
 script:
+  - mvn test -B
   - echo hello > test.ion
   - tools/ion-hash md5 test.ion
 
