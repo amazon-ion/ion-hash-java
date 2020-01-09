@@ -99,6 +99,25 @@
         </configuration>
       </plugin>
 
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>2.3.1</version>
+        <executions>
+          <execution>
+            <id>default-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <excludes>
+                <exclude>com/amazon/ionhash/tools/*.class</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <!-- run the unit tests -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
