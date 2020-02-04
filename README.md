@@ -158,3 +158,7 @@ A few items to note:
     hashReader.next();    // position reader just after the struct
     printBytesHex(hashReader.currentHash());
 ```
+
+## License
+
+This library is licensed under the Apache 2.0 License. 
